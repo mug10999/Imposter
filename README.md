@@ -25,7 +25,9 @@ The app is not a static-only website; all players must reach the same server.
    players are present.
 3. Exactly one randomly selected player is the imposter and only sees the
    category. Everyone else can privately reveal the same word, with its category
-   underneath. Word cards start hidden to reduce accidental screen sharing.
+   underneath. Categories give descriptive context (such as "Weather & outdoor
+   gear") without naming the word. Word cards start hidden to reduce accidental
+   screen sharing.
 4. Each player submits one description in turn order. Voting opens immediately
    after every player has submitted their clue.
 5. Everyone secretly votes for another player. Votes cannot be changed. Once

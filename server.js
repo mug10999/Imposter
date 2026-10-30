@@ -5,16 +5,22 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const WORDS = [
-  ['Espresso', 'Food & drink'], ['Pancake', 'Food & drink'],
-  ['Avocado', 'Food & drink'], ['Popcorn', 'Food & drink'],
-  ['Penguin', 'Animals'], ['Octopus', 'Animals'], ['Giraffe', 'Animals'],
-  ['Airport', 'Places'], ['Library', 'Places'], ['Museum', 'Places'],
-  ['Umbrella', 'Everyday things'], ['Headphones', 'Everyday things'],
-  ['Telescope', 'Everyday things'], ['Hammock', 'Everyday things'],
-  ['Volcano', 'Nature'], ['Rainbow', 'Nature'], ['Waterfall', 'Nature'],
-  ['Surfing', 'Activities'], ['Camping', 'Activities'], ['Karaoke', 'Activities'],
-  ['Astronaut', 'Jobs'], ['Detective', 'Jobs'], ['Magician', 'Jobs'],
-  ['Chess', 'Games'], ['Bowling', 'Games'], ['Basketball', 'Sports'],
+  ['Espresso', 'Drinks served in cafes'], ['Pancake', 'Breakfast & brunch foods'],
+  ['Avocado', 'Fruits & fresh produce'], ['Popcorn', 'Snacks & movie treats'],
+  ['Penguin', 'Birds & their habitats'], ['Octopus', 'Ocean & marine animals'],
+  ['Giraffe', 'Wild animals of the savanna'],
+  ['Airport', 'Travel & transportation hubs'], ['Library', 'Places for reading & learning'],
+  ['Museum', 'Places for culture & discovery'],
+  ['Umbrella', 'Weather & outdoor gear'], ['Headphones', 'Personal audio & electronics'],
+  ['Telescope', 'Tools for observing & exploring'], ['Hammock', 'Outdoor comfort & relaxation'],
+  ['Volcano', 'Landforms & geological features'], ['Rainbow', 'Weather & sky phenomena'],
+  ['Waterfall', 'Natural water features'],
+  ['Surfing', 'Water sports & beach activities'], ['Camping', 'Outdoor adventures & recreation'],
+  ['Karaoke', 'Music & group entertainment'],
+  ['Astronaut', 'Science & exploration careers'], ['Detective', 'Investigation & public safety jobs'],
+  ['Magician', 'Performance & entertainment jobs'],
+  ['Chess', 'Board games & strategy'], ['Bowling', 'Indoor sports & group games'],
+  ['Basketball', 'Team sports played on a court'],
 ];
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
