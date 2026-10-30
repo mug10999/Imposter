@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111312">
+  <meta name="description" content="One secret word. One convincing liar. A live social deduction game for your team.">
+  <title>IMPOSTER - Trust no one. Play together.</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Imposter home"><span class="brand-icon">i<span></span></span>IMPOSTER<span class="brand-dot">.</span></a>
+    <div class="workspace-label">THE HANGOUT</div>
+    <div class="nav-active"><span class="nav-icon">&#9671;</span> Game room <span class="nav-dot"></span></div>
+    <button class="nav-item" id="how-button"><span class="nav-icon">&#9783;</span> How to play <span class="arrow">&#8599;</span></button>
+    <div class="sidebar-bottom"><span class="little-star">&#10035;</span><p>A little suspicion.<br>A lot of good company.</p><div class="made-for"><span class="status-dot"></span> MADE FOR YOUR PEOPLE</div></div>
+  </aside>
+  <div class="page">
+    <header class="topbar"><div><span class="breadcrumb">The hangout</span><span class="slash">/</span><span id="breadcrumb-current">Game room</span></div><div class="top-right"><span class="live-pill"><span class="status-dot"></span><span id="connection-label">LET'S PLAY</span></span><span class="tiny-avatar">YOU</span></div></header>
+    <main>
+      <div class="eyebrow"><span class="eyebrow-line"></span> THE SOCIAL DEDUCTION GAME</div>
+      <div class="heading-row"><div><h1>Your team.<br>One <em>imposter.</em></h1><p class="subtitle">Same word. Different intentions. Who's bluffing?</p></div><div class="stamp"><span>&#10035;</span><div>TRUST NO ONE.<br>PLAY TOGETHER.</div></div></div>
+      <div id="error" class="notice error" role="alert" hidden></div>
+      <div id="toast" class="notice toast" role="status" hidden></div>
+      <section id="home">
+        <div class="entry-grid">
+          <div class="create-card">
+            <div class="card-top"><span class="square-icon">&#10033;</span><span class="tag">THE MORE, THE SUSPICIOUS</span></div>
+            <h2>Bring your people.</h2><p>Start a room, send the invite, and let the<br class="desktop-break"> accusations begin.</p>
+            <form id="create-form"><label for="create-name">YOUR NAME</label><input id="create-name" name="name" placeholder="What should we call you?" maxlength="24" autocomplete="nickname" required><button class="button primary wide" type="submit">Create a room <span>&#8599;</span></button></form>
+            <div class="card-foot"><span>&#9673; &nbsp; 3-12 players</span><span>&#9719; &nbsp; About 5 minutes</span><span>No sign-up</span></div>
+          </div>
+          <div class="join-card"><div class="card-top"><span class="square-icon dark">&#8594;</span><span class="tag">GOT AN INVITE?</span></div><h2>Slip into a room.</h2><p>Your team is waiting. Try to look innocent.</p><form id="join-form"><label for="join-name">YOUR NAME</label><input id="join-name" name="name" placeholder="Your very unsuspicious name" maxlength="24" autocomplete="nickname" required><label for="room-code">ROOM CODE</label><input id="room-code" class="code-input" name="code" placeholder="E.G. A1B2C3" pattern="[a-fA-F0-9]{6}" maxlength="6" required><button class="button secondary wide" type="submit">Join the room <span>&#8594;</span></button></form></div>
+        </div>
+        <div class="how-heading"><h3>A good liar fits right in.</h3><span>THE GAME PLAN <span>&#8600;</span></span></div>
+        <div class="steps"><article><div class="step-number">01 <span>&#9672;</span></div><h4>Get your secret</h4><p>Everyone gets the same word and category. The imposter? Just the category.</p></article><article><div class="step-number">02 <span>&#8779;</span></div><h4>Talk the talk</h4><p>Take turns giving one clue each. Be specific. But not too specific.</p></article><article><div class="step-number">03 <span>&#10005;</span></div><h4>Trust your gut</h4><p>Vote for the imposter. Catch them, or watch them get away with it.</p></article></div>
+      </section>
+      <section id="game" hidden></section>
+      <footer><span>A game of words, wit & wildly misplaced trust.</span><span>KEEP YOUR FRIENDS CLOSE. <strong>YOUR WORD CLOSER.</strong></span></footer>
+    </main>
+  </div>
+  <dialog id="how-dialog"><button class="close-button" id="close-how" aria-label="Close instructions">&#10005;</button><div class="eyebrow">THE GAME PLAN</div><h2>Here's the inside word.</h2><ol><li>Create a room and invite 2-11 teammates using its code or link.</li><li>The host starts. Everyone privately gets the same word and category, except one randomly chosen imposter who sees only the category.</li><li>In turn order, each player submits one short description. Don't say the secret word!</li><li>After everyone gives their clue, everyone casts one secret vote. You can't vote for yourself or change a locked vote.</li><li>If the imposter alone gets the most votes, they're caught. Otherwise, they survive. Ties mean the imposter survives.</li></ol><p>Use Room chat for banter at any time. Everyone in the room can read it, so don't share the secret word! Chat doesn't count as your clue.</p><p>Keep this page open. Refreshing reconnects you to the same seat. Rooms last up to 12 hours without room activity.</p></dialog>
+</body>
+</html>
