@@ -2,14 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameServer } from '../server.js';
 
-async function setup(t, count = 3) {
+async function setup(t, count = 3, basePath = '') {
   const server = createGameServer();
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => {
     server.closeAllConnections();
     return new Promise(resolve => server.close(resolve));
   });
-  const base = `http://127.0.0.1:${server.address().port}`;
+  const base = `http://127.0.0.1:${server.address().port}${basePath}`;
   async function request(action, data = {}, token, method = 'POST') {
     const res = await fetch(`${base}/api/${action}`, {
       method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -33,6 +33,70 @@ async function setup(t, count = 3) {
   }
   return { base, request, host, players, state, post, describe };
 }
+
+test('subpath hosting preserves assets, invite queries, live chat, and a complete game', async t => {
+  const { base, host, players, state, post, describe } = await setup(t, 3, '/imposter');
+  const origin = new URL(base).origin;
+  const redirect = await fetch(`${base}?room=${host.state.code}`, { redirect: 'manual' });
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers.get('location'), `/imposter/?room=${host.state.code}`);
+  const page = await fetch(`${base}/?room=${host.state.code}`);
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /href="\.\/style\.css"/);
+  assert.match(html, /src="\.\/app\.js"/);
+  assert.match(html, /class="brand" href="\.\/"/);
+  for (const asset of ['app.js', 'style.css']) {
+    const response = await fetch(`${base}/${asset}`);
+    assert.equal(response.status, 200);
+    assert.ok((await response.text()).length > 0);
+  }
+  assert.equal((await fetch(`${origin}/`)).status, 200);
+  assert.equal((await fetch(`${origin}/imposter-other`)).status, 404);
+  await post(host, 'start');
+  const states = await Promise.all(players.map(state));
+  const imposter = players[states.findIndex(s => s.isImposter)];
+  assert.ok(imposter);
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  const response = await fetch(`${base}/api/events`, {
+    headers: { Authorization: `Bearer ${imposter.token}` },
+    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+  });
+  assert.equal(response.status, 200);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  async function nextEvent() {
+    while (true) {
+      const boundary = buffer.indexOf('\n\n');
+      if (boundary !== -1) {
+        const event = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        if (event.startsWith('data: ')) return JSON.parse(event.slice(6));
+      } else {
+        const chunk = await reader.read();
+        assert.equal(chunk.done, false);
+        buffer += decoder.decode(chunk.value, { stream: true });
+      }
+    }
+  }
+  assert.equal((await nextEvent()).word, null);
+  assert.equal((await post(host, 'chat', { text: 'Subpath chat' })).status, 200);
+  const update = await nextEvent();
+  assert.equal(update.word, null);
+  assert.equal(update.messages.at(-1).text, 'Subpath chat');
+  controller.abort();
+  await describe();
+  for (let i = 0; i < players.length; i++) {
+    assert.equal((await post(players[i], 'vote', {
+      playerId: players[(i + 1) % players.length].state.selfId,
+    })).status, 200);
+  }
+  assert.equal((await state(host)).phase, 'results');
+  assert.equal((await post(host, 'reset')).status, 200);
+  for (const player of players) assert.equal((await post(player, 'leave')).status, 200);
+});
 
 test('full caught game: private words, one clue each, secret immutable votes, restart', async t => {
   const { host, players, state, post, describe, request } = await setup(t);

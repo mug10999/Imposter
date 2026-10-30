@@ -108,6 +108,13 @@ export function createGameServer() {
     res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     try {
       const url = new URL(req.url, 'http://localhost');
+      if (req.method === 'GET' && url.pathname === '/imposter') {
+        res.writeHead(308, { Location: `/imposter/${url.search}` });
+        return res.end();
+      }
+      if (url.pathname.startsWith('/imposter/')) {
+        url.pathname = url.pathname.slice('/imposter'.length);
+      }
       if (req.method === 'GET' && FILES[url.pathname]) {
         const [file, type] = FILES[url.pathname];
         res.setHeader('Content-Type', `${type}; charset=utf-8`);

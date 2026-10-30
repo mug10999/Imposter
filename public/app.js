@@ -1,4 +1,5 @@
 const $ = selector => document.querySelector(selector);
+const baseUrl = new URL('./', import.meta.url);
 let token = sessionStorage.getItem('imposter-token');
 let state = null;
 let streamController;
@@ -22,7 +23,7 @@ function toast(message) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 3500);
 }
 async function api(action, data = {}, method = 'POST') {
-  const response = await fetch(`/api/${action}`, {
+  const response = await fetch(new URL(`api/${action}`, baseUrl), {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...(method === 'POST' ? { body: JSON.stringify(data) } : {}),
@@ -55,7 +56,7 @@ async function listen() {
   streamController = controller;
   while (!controller.signal.aborted) {
     try {
-      const response = await fetch('/api/events', { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+      const response = await fetch(new URL('api/events', baseUrl), { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
       if (!response.ok) {
         if (response.status === 401) {
           clearSession();
@@ -237,7 +238,7 @@ for (const mode of ['create', 'join']) {
       token = result.token;
       sessionStorage.setItem('imposter-token', token);
       receive(result.state);
-      history.replaceState(null, '', `/?room=${state.code}`);
+      history.replaceState(null, '', new URL(`?room=${state.code}`, baseUrl));
       listen();
     } catch (error) { showError(error.message); }
     finally { submitting = false; button.disabled = false; }
@@ -252,7 +253,7 @@ $('#game').addEventListener('click', async event => {
   if (target.dataset.vote) { selectedVote = target.dataset.vote; render(); }
   if (target.id === 'lock-vote' && selectedVote) await act('vote', { playerId: selectedVote });
   if (target.id === 'copy-invite') {
-    const link = `${location.origin}/?room=${state.code}`;
+    const link = new URL(`?room=${state.code}`, baseUrl).href;
     try {
       await navigator.clipboard.writeText(link);
       toast('Invite copied. Send it to your usual suspects.');
@@ -266,7 +267,7 @@ $('#game').addEventListener('click', async event => {
     try {
       await api('leave');
       clearSession();
-      history.replaceState(null, '', '/');
+      history.replaceState(null, '', baseUrl);
     } catch (error) { showError(error.message); }
     finally { submitting = false; }
   }

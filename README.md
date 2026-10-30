@@ -12,6 +12,15 @@ npm start
 Open `http://localhost:3000`. On Windows with PowerShell script restrictions, use
 `npm.cmd start`. Change the port using the `PORT` environment variable.
 
+The game also works at `/imposter/`, including room invites, assets, APIs, and
+live chat. Opening `/imposter` redirects to `/imposter/` while preserving invite
+parameters. The original root address remains supported.
+
+The Azure deployment is available at
+https://anveda.azurewebsites.net/imposter/. It uses the existing Basic B1 App
+Service plan in West US 3 with HTTPS and Always On. The Azure hostname has no
+separate domain registration charge; the B1 hosting plan still incurs charges.
+
 For teammates on the same network, share the host machine's reachable network
 address (for example `http://192.168.1.20:3000`), not `localhost`. The host's
 firewall must allow that port. Remote teammates need this Node server hosted on a
