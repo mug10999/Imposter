@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f6f1">
+  <title>Draw Together — A little doodle. A lot of fun.</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Draw Together home"><span class="brand-icon">✎</span> draw<span class="brand-light">together</span><span class="brand-dot">.</span></a>
+    <span class="header-note"><span class="online-dot"></span> Good times, drawn together</span>
+    <button class="text-button" id="rules-button">How to play <span>↗</span></button>
+  </header>
+
+  <main>
+    <section id="welcome" class="welcome">
+      <div class="intro">
+        <div class="eyebrow"><span class="small-star">✳</span> THE NO-TALENT-REQUIRED PARTY GAME</div>
+        <h1>A little doodle.<br>A <span class="highlight">lot of fun.<svg viewBox="0 0 310 18" aria-hidden="true"><path d="M4 13 Q140 -4 303 9 M17 17 Q155 4 291 13"/></svg></span></h1>
+        <p class="intro-copy">A word, a blank canvas, and your favorite people.<br>Draw your best. Guess the rest.</p>
+        <div class="feature-row"><span><i>♧</i> 2–8 friends</span><span><i>◷</i> 60-second turns</span><span><i>✧</i> Endless laughs</span></div>
+        <div class="doodle-scene" aria-hidden="true">
+          <div class="doodle-card">
+            <span class="tape"></span><span class="card-label">a masterpiece, probably.</span>
+            <svg viewBox="0 0 340 190"><g fill="none" stroke="#313747" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M94 133 Q105 76 174 87 Q232 87 251 139 Z" fill="#f3ce6c"/><path d="M116 95 L117 59 L147 85 M201 88 L229 60 L228 109" fill="#f3ce6c"/><path d="M138 113 L138 120 M199 112 L199 119 M160 128 Q168 139 177 127 M168 121 L168 130 M104 122 L72 115 M103 130 L72 135 M230 121 L264 113 M236 130 L271 137"/><path d="M129 144 L126 154 L155 152 L158 142 M194 143 L196 153 L224 153 L220 140"/><path d="M251 138 Q282 113 270 94 Q254 80 255 103"/><path d="M142 64 Q151 57 155 63 M162 53 Q171 46 175 52" stroke="#7c66db"/></g><text x="146" y="177" fill="#7c66db" font-size="17" font-family="cursive">cat...?</text><g fill="#7c66db"><path d="M49 55 L52 44 L56 55 L67 58 L56 62 L53 73 L49 62 L39 58 Z"/><circle cx="285" cy="50" r="3"/></g></svg>
+          </div>
+          <span class="bubble bubble-one">is that a potato? <span>👀</span></span><span class="bubble bubble-two">it's a cat!! <span>+10</span></span>
+          <span class="scribble-arrow">↝</span><span class="scene-note">bad drawings.<br>great memories.</span>
+        </div>
+      </div>
+      <div class="entry-column">
+        <section class="entry-card">
+          <span class="card-kicker">LET'S MAKE SOMETHING QUESTIONABLE</span>
+          <h2>Your next game night<br>starts here.</h2>
+          <label for="player-name">What should we call you?</label>
+          <div class="name-field"><span id="avatar-preview">☺</span><input id="player-name" placeholder="Your nickname" maxlength="20" autocomplete="nickname"></div>
+          <button id="create-button" class="button primary">Create a room <span>→</span></button>
+          <p class="input-caption">Be the host. Bring the whole crew.</p>
+          <div class="divider"><span>or join your friends</span></div>
+          <label for="room-code">Got a room code?</label>
+          <div class="join-row"><input id="room-code" placeholder="e.g. A1B2C3" maxlength="6" autocomplete="off" spellcheck="false"><button id="join-button" class="button secondary">Join room <span>↗</span></button></div>
+          <p id="entry-error" class="error" role="alert"></p>
+          <div class="entry-footer"><span>✦</span> No sign-ups. No downloads. Just play.</div>
+        </section>
+        <p class="below-card">Warning: may reveal who can't draw a horse.</p>
+      </div>
+    </section>
+
+    <section class="game hidden" id="game" aria-label="Game room">
+      <div class="room-heading">
+        <div><div class="eyebrow">YOUR LITTLE CORNER OF CHAOS</div><h1>Let the doodles begin<span class="brand-dot">.</span></h1></div>
+        <div class="room-actions"><button class="room-code-button" id="copy-code" title="Copy invite link">Room <strong id="code-label"></strong> <span>⧉</span></button><button class="text-button" id="leave-button">Leave room ↗</button></div>
+      </div>
+      <div class="game-layout">
+        <aside class="players-panel panel">
+          <div class="panel-title"><h2>The crew</h2><span id="player-count">0/8</span></div>
+          <p class="panel-subtitle">A little friendly competition.</p>
+          <ol id="players" class="player-list"></ol>
+          <div class="scoring-note"><span>✧</span><div><strong>Good guesses pay off.</strong><p>Guess it: +10<br>Draw it, they guess it: +10</p></div></div>
+        </aside>
+        <section class="canvas-panel panel">
+          <div class="turn-bar"><div><span class="status-label" id="turn-label">WAITING ROOM</span><h2 id="word-label">Gather your favorite people</h2></div><div class="timer-group"><button id="add-time" class="small-button hidden" title="Add 15 seconds">+15s</button><span id="timer" class="timer">60<span>s</span></span></div></div>
+          <div class="drawing-stage">
+            <canvas id="canvas" width="1000" height="700" aria-label="Shared drawing canvas"></canvas>
+            <div class="stage-overlay" id="stage-overlay"><div class="overlay-icon">✎</div><h2 id="overlay-title">Better with friends.</h2><p id="overlay-copy">Share your room code and invite your crew.<br>You need at least 2 players to start.</p><button id="start-button" class="button primary">Start game <span>→</span></button><span id="waiting-host" class="muted hidden">Waiting for the host to start…</span></div>
+          </div>
+          <div class="toolbar" id="toolbar"><div class="colors" id="colors" aria-label="Brush colors"></div><span class="tool-divider"></span><label class="brush-label" for="brush-size">Brush <input id="brush-size" type="range" min="2" max="30" value="6"></label><button class="text-button" id="eraser-button" title="Use eraser" aria-pressed="false">Eraser</button><button class="text-button" id="clear-button">Clear</button></div>
+          <div class="canvas-footnote" id="canvas-note">Stick figures are welcome here.</div>
+        </section>
+        <aside class="chat-panel panel"><div class="panel-title"><h2>The guesswork</h2><span>✎</span></div><p class="panel-subtitle">Big ideas. Wild guesses.</p><div id="messages" class="messages" role="log" aria-live="polite"></div><form id="guess-form"><label class="sr-only" for="guess-input">Your guess</label><div class="guess-field"><input id="guess-input" placeholder="Type your guess…" maxlength="80" autocomplete="off"><button type="submit" aria-label="Send guess">↑</button></div></form><p id="guess-note" class="guess-note">Hit enter to send your guess</p></aside>
+      </div>
+    </section>
+    <section class="how-strip" id="how-strip"><div><span class="step-number">01</span><div><h3>Round up the crew</h3><p>Create a room. Send the code.</p></div></div><span class="step-arrow">↝</span><div><span class="step-number">02</span><div><h3>Draw your secret word</h3><p>60 seconds. Artistic talent optional.</p></div></div><span class="step-arrow">↝</span><div><span class="step-number">03</span><div><h3>Guess it. Score it.</h3><p>10 points. Unlimited bragging rights.</p></div></div></section>
+  </main>
+  <footer class="site-footer"><span>A blank canvas. A full room. A good time.</span><span>Made for a little human connection <span class="footer-star">✳</span></span></footer>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <dialog id="rules-dialog"><button class="dialog-close text-button" id="close-rules" aria-label="Close rules">✕</button><span class="eyebrow">THE SHORT VERSION</span><h2>Draw. Guess. Repeat.</h2><ol class="rules-list"><li>Create a room and share the invite link or code with 2–8 players.</li><li>Everyone gets one turn to draw a secret word. Each turn starts with 60 seconds.</li><li>The host can add 15 seconds at a time while the timer is running.</li><li>Each player who guesses correctly earns 10 points. The drawer earns 10 points once if anyone gets it.</li><li>No correct guesses? No points. When everyone has drawn, the highest score wins. Ties are shared!</li></ol><p class="muted">Keep your word a secret. Please don't draw letters or spell it out!</p></dialog>
+  <script src="./socket.io/socket.io.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,11 +1,13 @@
 # IMPOSTER
 
-A real-time, browser-based social deduction game for 3-12 teammates. No accounts,
-dependencies, or build step required. Requires Node.js 22 or newer.
+A real-time, browser-based social deduction game for 3-12 teammates, with
+Draw Together Pictionary hosted separately at `/doodle/`. No accounts or build
+step required. Requires Node.js 22 or newer.
 
 ## Run
 
 ```sh
+npm ci
 npm start
 ```
 
@@ -15,6 +17,28 @@ Open `http://localhost:3000`. On Windows with PowerShell script restrictions, us
 The game also works at `/imposter/`, including room invites, assets, APIs, and
 live chat. Opening `/imposter` redirects to `/imposter/` while preserving invite
 parameters. The original root address remains supported.
+
+## Draw Together
+
+Open https://anveda.azurewebsites.net/doodle/ (or `http://localhost:3000/doodle/`)
+for the separate 2-8 player drawing and guessing game. `/doodle` redirects to
+`/doodle/`, preserving invite parameters. Create a room and share its invite link;
+each player gets a 60-second drawing turn, correct guesses earn 10 points, and
+the host can add 15 seconds during a turn. The drawer earns 10 points once when
+anyone guesses correctly. Highest total wins after everyone has drawn.
+
+The source is imported from `mug10999/doodle` commit
+`05c3bdc59a2c9ff12915bfb1a8f096c4b7e1f816`. Its CommonJS server and original
+game tests live in `doodle/`; the root server mounts its Express handler on the
+same HTTP server with Socket.IO isolated at `/doodle/socket.io`. Assets, home and
+leave links, invite URLs, and `/doodle/health` stay within that prefix. Imposter
+retains its own root and `/imposter/` assets, APIs, SSE connections and rooms.
+Run installation and tests from the repository root, not from `doodle/`.
+
+Both games use in-memory rooms. Deploying or restarting clears active games.
+Draw Together disconnects a leaving/refreshing player rather than retaining
+their seat, transfers host ownership when needed, and removes empty rooms.
+Use one server instance; multiple instances cannot share either game's rooms.
 
 The Azure deployment is available at
 https://anveda.azurewebsites.net/imposter/. It uses the existing Basic B1 App
@@ -74,6 +98,15 @@ npm test
 On restricted Windows PowerShell, use `npm.cmd test`.
 
 ## Hosting notes
+
+The existing Azure app uses manual ZIP deployment (OneDeploy), not a connected
+source-control branch. The checked-in GitHub Actions workflow is an unconfigured
+template and is not the production deployment path. Deployment commits use
+`[skip ci]` to avoid invoking that template. Persist changes on the deployment
+branch before publishing a ZIP of that exact commit with production dependencies
+installed using `npm ci --omit=dev`. Publish to the existing `anveda` app in
+`imposter-game-rg` using the signed-in Azure CLI identity; no publish profile or
+new Azure resources are needed. Do not include `.git`, `.env`, or credentials.
 
 Room state lives in server memory and expires after 12 hours without room
 activity (including chat). Restarting the process loses all rooms. Run a single

@@ -3,6 +3,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import doodle from './doodle/server.js';
 
 const WORDS = [
   ['Espresso', 'Drinks served in cafes'], ['Pancake', 'Breakfast & brunch foods'],
@@ -102,6 +103,10 @@ export function createGameServer() {
     catch { throw new GameError('Please send a valid JSON request.'); }
   }
   const server = http.createServer(async (req, res) => {
+    const pathname = new URL(req.url, 'http://localhost').pathname;
+    if (pathname === '/doodle' || pathname.startsWith('/doodle/')) {
+      return drawingGame.app(req, res);
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cache-Control', 'no-store');
@@ -257,6 +262,7 @@ export function createGameServer() {
       } else res.end();
     }
   });
+  const drawingGame = doodle.createGameServer({ httpServer: server, basePath: '/doodle' });
   const cleanup = setInterval(() => {
     for (const [code, room] of rooms) {
       if (Date.now() - room.updatedAt > ROOM_TTL) {
