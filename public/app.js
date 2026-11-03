@@ -9,7 +9,7 @@ let submitting = false;
 let sendingChat = false;
 let toastTimer;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const playerName = id => state.players.find(p => p.id === id)?.name ?? 'Player';
+const playerName = id => state.players.find(p => p.id === id)?.name ?? state.participants.find(p => p.id === id)?.name ?? 'Player';
 const initials = name => [...name].slice(0, 2).join('').toUpperCase();
 
 function showError(message) {
@@ -41,11 +41,19 @@ function connection(connected) {
   $('#connection-label').classList.toggle('connection-lost', !connected);
 }
 function receive(next) {
+  if (next.removed) {
+    clearSession();
+    history.replaceState(null, '', baseUrl);
+    showError(next.message);
+    return;
+  }
   const chatOnly = state && JSON.stringify({ ...state, messages: undefined }) === JSON.stringify({ ...next, messages: undefined });
-  if (state?.phase !== next.phase || state?.round !== next.round) {
+  if (state?.phase !== next.phase || state?.dealId !== next.dealId) {
     reveal = false;
     selectedVote = null;
+    if ($('#clue-text')) $('#clue-text').value = '';
   }
+  if (!next.players.some(p => p.id === selectedVote)) selectedVote = null;
   state = next;
   if (chatOnly && $('#room-chat')) updateChat(chatScrollPosition());
   else render();
@@ -94,6 +102,8 @@ function clearSession() {
   sessionStorage.removeItem('imposter-token');
   token = null;
   state = null;
+  reveal = false;
+  selectedVote = null;
   $('#game').replaceChildren();
   $('#home').hidden = false;
   $('#game').hidden = true;
@@ -102,10 +112,13 @@ function clearSession() {
   $('#connection-label').classList.remove('connection-lost');
 }
 function clueMarkup(clue) {
-  return `<div class="clue"><div class="clue-top"><strong>${escape(playerName(clue.playerId))}</strong><span>ROUND ${clue.round}</span></div><p class="clue-text">${escape(clue.text)}</p></div>`;
+  return `<div class="clue"><div class="clue-top"><strong>${escape(clue.name ?? playerName(clue.playerId))}</strong><span>ROUND ${clue.round}</span></div><p class="clue-text">${escape(clue.text)}</p></div>`;
 }
 function secretMarkup() {
-  return `<div class="secret-card ${state.isImposter ? 'imposter' : ''}"><div class="secret-label">${state.isImposter ? 'YOUR MISSION: BLEND IN' : 'FOR YOUR EYES ONLY'}</div><div class="secret-word">${state.isImposter ? "You're the imposter." : reveal ? escape(state.word) : 'A little secret.'}</div><div class="category">CATEGORY &nbsp; / &nbsp; ${escape(state.category)}</div>${state.isImposter ? '<p class="small-muted">You only know the category. Listen closely. Make it convincing.</p>' : `<button class="button ghost reveal-button" id="reveal-word">${reveal ? 'Hide my word' : 'Reveal my word'}</button><p class="small-muted">Keep it to yourself. Especially if you're sharing your screen.</p>`}</div>`;
+  return `<div class="secret-card ${reveal && state.isImposter ? 'imposter' : ''}"><div class="secret-label">${reveal && state.isImposter ? 'YOUR MISSION: BLEND IN' : 'FOR YOUR EYES ONLY'}</div><div class="secret-word">${reveal ? state.isImposter ? "You're the imposter." : escape(state.word) : 'A little secret.'}</div>${reveal ? `<div class="category">CATEGORY &nbsp; / &nbsp; ${escape(state.category)}</div>` : ''}<button class="button ghost reveal-button" id="reveal-word" aria-pressed="${reveal}">${reveal ? 'Hide my card' : 'Reveal my card'}</button><p class="small-muted">${reveal && state.isImposter ? 'You only know the category. Listen closely. Make it convincing.' : "Keep it to yourself. Especially if you're sharing your screen."}</p></div>`;
+}
+function activityMarkup() {
+  return `<section class="round-activity" aria-label="Round activity"><div class="phase-heading"><h3>Everyone's clues</h3></div><div class="clue-list" id="clue-list" role="log" aria-label="Submitted clues">${state.clues.length ? state.clues.map(clueMarkup).join('') : '<p class="small-muted">Clues will appear here as players take their turns.</p>'}</div><div class="phase-heading"><h3>Who voted for whom</h3></div><div class="ballot-list" aria-live="polite">${Object.entries(state.votes).length ? Object.entries(state.votes).map(([voter, target]) => `<p class="ballot"><strong>${escape(playerName(voter))}</strong> &rarr; ${escape(playerName(target))}</p>`).join('') : '<p class="small-muted">No votes yet. Locked votes appear here for everyone.</p>'}</div></section>`;
 }
 function chatPanel() {
   const panel = document.createElement('section');
@@ -167,18 +180,19 @@ function render() {
     content = `<div class="empty-lobby"><div class="orbit">&#10035;</div><h3>The usual suspects are gathering.</h3><p class="small-muted">Share the room code or invite link with your team.<br>Everyone joins on their own device. One of you won't be so innocent.</p><div class="lobby-rules"><span>3-12 PLAYERS</span><span>1 CLUE ROUND</span><span>1 IMPOSTER</span></div></div>${host ? `<button id="start-game" class="button secondary start-button" ${state.players.length < 3 ? 'disabled' : ''}>${state.players.length < 3 ? `Waiting for ${3 - state.players.length} more ${state.players.length === 2 ? 'player' : 'players'}` : 'Everyone in? Deal the secrets'} <span>&#8594;</span></button>` : '<div class="waiting">You\'re in. The host will start when everyone is ready.</div>'}`;
   } else if (state.phase === 'results') {
     const r = state.result;
-    content = `<div class="result"><div class="secret-label">THE TRUTH IS OUT</div><div class="result-icon">${r.caught ? '&#9678;' : '&#10035;'}</div><h2>${r.caught ? `Imposter ${escape(r.imposterName)} is caught!` : `Imposter ${escape(r.imposterName)} survived.`}</h2><p class="small-muted">${r.caught ? 'Good instincts, team. The word is safe.' : r.tied ? 'A tied vote. Just enough doubt to get away with it.' : 'Hiding in plain sight. That was a convincing bluff.'}</p><div class="secret-label">THE SECRET WORD WAS</div><div class="secret-word">${escape(state.word)}</div><p class="category">${escape(state.category)}</p></div><div class="phase-heading"><h3>The final vote</h3></div>${state.players.map(p => `<div class="player"><span class="avatar">${escape(initials(p.name))}</span><span class="player-name">${escape(p.name)}${p.id === r.imposterId ? ' <span class="player-meta">IMPOSTER</span>' : ''}</span><span class="vote-count">${r.counts[p.id]} ${r.counts[p.id] === 1 ? 'vote' : 'votes'}</span></div>`).join('')}${host ? '<button id="reset-game" class="button secondary start-button">Back to lobby <span>&#8594;</span></button>' : '<div class="waiting">The host can open the lobby for another game.</div>'}<details class="results-clues"><summary>Revisit the clues</summary><div class="clue-list">${state.clues.map(clueMarkup).join('')}</div></details>`;
+    content = `<div class="result"><div class="secret-label">THE TRUTH IS OUT</div><div class="result-icon">${r.caught ? '&#9678;' : '&#10035;'}</div><h2>${r.caught ? `Imposter ${escape(r.imposterName)} is caught!` : `Imposter ${escape(r.imposterName)} survived.`}</h2><p class="small-muted">${r.caught ? 'Good instincts, team. The word is safe.' : r.tied ? 'A tied vote. Just enough doubt to get away with it.' : 'Hiding in plain sight. That was a convincing bluff.'}</p><div class="secret-label">THE SECRET WORD WAS</div><div class="secret-word">${escape(state.word)}</div><p class="category">${escape(state.category)}</p></div><div class="phase-heading"><h3>The final vote</h3></div>${state.participants.filter(p => p.id in r.counts).map(p => `<div class="player"><span class="avatar">${escape(initials(p.name))}</span><span class="player-name">${escape(p.name)}${p.id === r.imposterId ? ' <span class="player-meta">IMPOSTER</span>' : ''}</span><span class="vote-count">${r.counts[p.id]} ${r.counts[p.id] === 1 ? 'vote' : 'votes'}</span></div>`).join('')}${host ? '<button id="reset-game" class="button secondary start-button">Back to lobby <span>&#8594;</span></button>' : '<div class="waiting">The host can open the lobby for another game.</div>'}`;
   } else {
     content = secretMarkup();
     if (state.phase === 'describing') {
       const mine = state.turnId === state.selfId;
-      content += `<div class="phase-heading"><span class="phase-badge">CLUE ROUND</span><h3>${mine ? "You're up. Play it cool." : `${escape(playerName(state.turnId))} is up.`}</h3></div><div class="clue-list" id="clue-list" role="log" aria-label="Submitted clues">${state.clues.length ? state.clues.map(clueMarkup).join('') : '<p class="small-muted">The first clue sets the tone. No pressure.</p>'}</div>${mine ? `<form id="clue-form" class="clue-form"><label for="clue-text">DESCRIBE THE WORD WITHOUT SAYING IT</label><div class="input-row"><input id="clue-text" placeholder="A clue, not a confession..." maxlength="160" required autocomplete="off"><button class="button secondary" type="submit">Send clue &#8594;</button></div><p class="small-muted">One clue per player. Up to 160 characters.</p></form>` : '<div class="waiting">Listen closely. Every clue could give the imposter away.</div>'}`;
+      content += `<div class="phase-heading"><span class="phase-badge">CLUE ROUND</span><h3>${mine ? "You're up. Play it cool." : `${escape(playerName(state.turnId))} is up.`}</h3></div>${mine ? `<form id="clue-form" class="clue-form"><label for="clue-text">DESCRIBE THE WORD WITHOUT SAYING IT</label><div class="input-row"><input id="clue-text" placeholder="A clue, not a confession..." maxlength="160" required autocomplete="off"><button class="button secondary" type="submit">Send clue &#8594;</button></div><p class="small-muted">One clue per player. Up to 160 characters.</p></form>` : '<div class="waiting">Listen closely. Every clue could give the imposter away.</div>'}`;
     } else {
-      content += `<div class="phase-heading"><span class="phase-badge">THE VOTE</span><h3>Who's not one of us?</h3></div><p class="small-muted">Pick the player you suspect. Your vote is secret and final.<br>A tied vote lets the imposter survive.</p>${voted ? `<div class="waiting">Vote locked for <strong>${escape(playerName(state.myVote))}</strong>. Waiting for the others... (${state.votedIds.length}/${state.players.length})</div>` : `<div class="vote-grid">${state.players.filter(p => p.id !== state.selfId).map(p => `<button class="vote-option ${selectedVote === p.id ? 'selected' : ''}" data-vote="${p.id}" aria-pressed="${selectedVote === p.id}"><span class="avatar">${escape(initials(p.name))}</span>${escape(p.name)}<span>${selectedVote === p.id ? '&#10003;' : '&#9675;'}</span></button>`).join('')}</div><button id="lock-vote" class="button secondary start-button" ${selectedVote ? '' : 'disabled'}>Lock in my vote <span>&#8594;</span></button><p class="small-muted">${state.votedIds.length}/${state.players.length} votes locked</p>`}<details class="results-clues"><summary>Review everyone's clues</summary><div class="clue-list">${state.clues.map(clueMarkup).join('')}</div></details>`;
+      content += `<div class="phase-heading"><span class="phase-badge">THE VOTE</span><h3>Who's not one of us?</h3></div><p class="small-muted">Pick the player you suspect. Everyone can see your locked vote.<br>A tied vote lets the imposter survive.</p>${voted ? `<div class="waiting">Vote locked for <strong>${escape(playerName(state.myVote))}</strong>. Waiting for the others... (${state.votedIds.length}/${state.players.length})</div>` : `<div class="vote-grid">${state.players.filter(p => p.id !== state.selfId).map(p => `<button class="vote-option ${selectedVote === p.id ? 'selected' : ''}" data-vote="${p.id}" aria-pressed="${selectedVote === p.id}"><span class="avatar">${escape(initials(p.name))}</span>${escape(p.name)}<span>${selectedVote === p.id ? '&#10003;' : '&#9675;'}</span></button>`).join('')}</div><button id="lock-vote" class="button secondary start-button" ${selectedVote ? '' : 'disabled'}>Lock in my vote <span>&#8594;</span></button><p class="small-muted">${state.votedIds.length}/${state.players.length} votes locked</p>`}`;
     }
   }
+  if (state.phase !== 'lobby') content += activityMarkup();
   chat?.remove();
-  game.innerHTML = `<div class="room-header"><div><div class="eyebrow">YOUR PRIVATE HANGOUT</div><div class="room-code">${state.code}</div></div><div class="room-actions"><button class="button ghost" id="copy-invite">Copy invite &#8599;</button>${state.phase === 'lobby' ? '<button class="button ghost" id="leave-room">Leave room</button>' : ''}</div></div><div class="room-layout"><div class="panel game-panel">${content}</div><div class="room-sidebar"><aside class="panel players-panel"><div class="players-title"><span>THE SUSPECTS</span><span>${state.players.length}/12</span></div><div class="player-list">${state.players.map(p => `<div class="player ${p.id === state.turnId ? 'current' : ''}"><span class="avatar">${escape(initials(p.name))}</span><span class="player-name">${escape(p.name)}${p.id === state.selfId ? ' <span class="player-meta">YOU</span>' : ''}</span><span class="player-meta">${p.id === state.hostId ? 'HOST' : state.phase === 'voting' && state.votedIds.includes(p.id) ? 'VOTED' : ''}</span></div>`).join('')}</div><p class="small-muted">One team. One secret.<br>One very good liar.</p></aside></div></div>`;
+  game.innerHTML = `<div class="room-header"><div><div class="eyebrow">YOUR PRIVATE HANGOUT</div><div class="room-code">${state.code}</div></div><div class="room-actions"><button class="button ghost" id="copy-invite">Copy invite &#8599;</button>${host && ['describing', 'voting'].includes(state.phase) ? '<button class="button ghost" id="refresh-word">Refresh word</button>' : ''}<button class="button ghost" id="leave-room">Leave room</button></div></div>${state.notice ? `<p class="notice room-notice" role="status">${escape(state.notice)}</p>` : ''}<div class="room-layout"><div class="panel game-panel">${content}</div><div class="room-sidebar"><aside class="panel players-panel"><div class="players-title"><span>TURN ORDER</span><span>${state.players.length}/12</span></div><div class="player-list">${state.players.map((p, index) => `<div class="player ${p.id === state.turnId ? 'current' : ''}"><span class="avatar">${index + 1}</span><span class="player-name">${escape(p.name)}${p.id === state.selfId ? ' <span class="player-meta">YOU</span>' : ''}<span class="player-meta">${p.id === state.hostId ? ' HOST' : ''}${state.votedIds.includes(p.id) ? ' VOTED' : ''}</span></span>${host && p.id !== state.selfId ? `<button class="kick-button" data-kick="${p.id}" aria-label="Kick ${escape(p.name)}">Kick</button>` : ''}</div>`).join('')}</div><p class="small-muted">Turn order is shuffled each game.</p></aside></div></div>`;
   $('.room-sidebar').append(chat ?? chatPanel());
   if ($('#clue-text')) {
     $('#clue-text').value = draft;
@@ -203,7 +217,7 @@ async function sendChat() {
   $('#chat-error').hidden = true;
   try {
     await api('chat', { text: draft });
-    if (token === sessionToken && state?.code === roomCode && $('#chat-text').value === draft) {
+    if (token === sessionToken && state?.code === roomCode && $('#chat-text')?.value === draft) {
       $('#chat-text').value = '';
     }
   } catch (error) {
@@ -250,6 +264,10 @@ $('#game').addEventListener('click', async event => {
   if (target.id === 'reveal-word') { reveal = !reveal; render(); }
   if (target.id === 'start-game') await act('start');
   if (target.id === 'reset-game') await act('reset');
+  if (target.id === 'refresh-word' && confirm('Refresh the word? All clues and votes will be cleared. The imposter stays the same.')) await act('refresh');
+  if (target.dataset.kick && confirm(`Remove ${playerName(target.dataset.kick)} from the room? The game returns to the lobby if the imposter leaves or fewer than three players remain.`)) {
+    await act('kick', { playerId: target.dataset.kick });
+  }
   if (target.dataset.vote) { selectedVote = target.dataset.vote; render(); }
   if (target.id === 'lock-vote' && selectedVote) await act('vote', { playerId: selectedVote });
   if (target.id === 'copy-invite') {
@@ -263,6 +281,7 @@ $('#game').addEventListener('click', async event => {
   }
   if (target.id === 'leave-room') {
     if (submitting) return;
+    if (state.phase !== 'lobby' && !confirm('Leave this room? The game returns to the lobby if you are the imposter or fewer than three players remain.')) return;
     submitting = true;
     try {
       await api('leave');

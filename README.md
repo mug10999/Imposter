@@ -58,12 +58,16 @@ The app is not a static-only website; all players must reach the same server.
    players are present.
 3. Exactly one randomly selected player is the imposter and only sees the
    category. Everyone else can privately reveal the same word, with its category
-   underneath. Categories give descriptive context (such as "Weather & outdoor
-   gear") without naming the word. Word cards start hidden to reduce accidental
-   screen sharing.
-4. Each player submits one description in turn order. Voting opens immediately
+   underneath. Categories are broad (such as "Objects", "Animals", or "Nature")
+   rather than hints that nearly identify the word. All role cards, including
+   the imposter's, start hidden and can be revealed or hidden with the same
+   button. Hidden cards do not disclose the role or category.
+4. Turn order is shuffled each game and shown in the player list. Each player
+   submits one description in turn order. Voting opens immediately
    after every player has submitted their clue.
-5. Everyone secretly votes for another player. Votes cannot be changed. Once
+5. Everyone votes for another player. Clues and individual locked votes stay
+   visible throughout clues, voting, and results, without opening a disclosure.
+   Votes cannot be changed unless their target leaves the active game. Once
    everyone votes, the imposter is caught only if they alone receive the most
    votes. A tie or a different winner means the imposter survives.
 6. Everyone sees the imposter's name, the outcome, the word, and vote totals.
@@ -72,9 +76,18 @@ The app is not a static-only website; all players must reach the same server.
 
 Refreshing reconnects to the same seat in that browser tab. Use separate browser
 profiles or devices for multiple players. Seats are not removed on a temporary
-disconnect. Players may leave only in the lobby; host ownership then transfers
-to the next player. There is no mid-game kick/skip mechanism, so every player
-must finish their turns and vote.
+disconnect. Players can leave in any phase, and the host can kick anyone else
+using the player list. Removed players lose access immediately. Host ownership
+transfers only when the host leaves. During clues or voting, the game continues
+with the remaining players, skipping a departed player's turn and clearing votes
+by or for them. If the imposter leaves or fewer than three players remain, the
+game returns to the lobby instead. Completed results stay available if players
+leave after voting.
+
+During clues or voting, the host can **Refresh word**. This chooses a different
+word and category, keeps the same imposter, shuffles turn order, hides everyone's
+card again, and clears all clues and votes to restart the clue round. Room chat
+is preserved.
 
 ## Room chat
 
@@ -116,5 +129,6 @@ traffic rate limiting, moderation, persistent storage, or account recovery.
 
 Private roles and words are filtered on the server for each player, including
 live event streams. Player credentials stay in browser session storage, and
-other players' credentials and individual ballots are never sent to clients.
+other players' credentials are never sent to clients. Individual ballots are
+intentionally public to everyone in the room as soon as they are locked.
 Protect the host machine and use HTTPS outside a trusted local network.

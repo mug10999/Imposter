@@ -23,7 +23,9 @@ async function setup(t, count = 3, basePath = '') {
   const state = p => request('state', {}, p.token, 'GET').then(r => r.data);
   const post = (p, action, data) => request(action, data, p.token);
   async function describe() {
-    for (const p of players) {
+    const order = (await state(host)).players;
+    for (const seat of order) {
+      const p = players.find(p => p.state.selfId === seat.id);
       const current = await state(p);
       assert.equal(current.phase, 'describing');
       assert.equal(current.round, 1);
@@ -98,7 +100,7 @@ test('subpath hosting preserves assets, invite queries, live chat, and a complet
   for (const player of players) assert.equal((await post(player, 'leave')).status, 200);
 });
 
-test('full caught game: private words, one clue each, secret immutable votes, restart', async t => {
+test('full caught game: private words, one clue each, public immutable votes, restart', async t => {
   const { host, players, state, post, describe, request } = await setup(t);
   assert.equal((await post(players[1], 'start')).status, 403);
   assert.equal((await post(host, 'start')).status, 200);
@@ -117,22 +119,23 @@ test('full caught game: private words, one clue each, secret immutable votes, re
     assert.ok(s.players.every(p => !('token' in p)));
   }
   assert.equal((await post(host, 'vote', { playerId: others[0].state.selfId })).status, 400);
-  assert.equal((await post(players[1], 'clue', { text: 'Out of turn' })).status, 400);
-  assert.equal((await post(host, 'clue', { text: ' ' })).status, 400);
+  const first = players.find(p => p.state.selfId === states[0].turnId);
+  assert.equal((await post(players.find(p => p !== first), 'clue', { text: 'Out of turn' })).status, 400);
+  assert.equal((await post(first, 'clue', { text: ' ' })).status, 400);
   await describe();
   const voting = await state(host);
   assert.equal(voting.clues.length, players.length);
   assert.equal(voting.phase, 'voting');
   assert.equal(voting.turnId, null);
   assert.equal(voting.round, 1);
-  assert.deepEqual(voting.clues.map(clue => clue.playerId), players.map(p => p.state.selfId));
+  assert.deepEqual(voting.clues.map(clue => clue.playerId), voting.players.map(p => p.id));
   assert.equal((await post(host, 'clue', { text: 'An unwanted second clue' })).status, 400);
   assert.equal((await post(others[0], 'vote', { playerId: others[0].state.selfId })).status, 400);
   await post(others[0], 'vote', { playerId: imposter.state.selfId });
   assert.equal((await post(others[0], 'vote', { playerId: others[1].state.selfId })).status, 400);
   const privateState = await state(others[1]);
   assert.equal(privateState.myVote, null);
-  assert.equal(privateState.votes, undefined);
+  assert.deepEqual(privateState.votes, { [others[0].state.selfId]: imposter.state.selfId });
   assert.equal(privateState.votedIds.length, 1);
   await post(others[1], 'vote', { playerId: imposter.state.selfId });
   await post(imposter, 'vote', { playerId: others[0].state.selfId });
@@ -205,7 +208,7 @@ test('live events filter the imposter word and reject joining an active game', a
   assert.equal(event.isImposter, true);
   assert.equal(event.imposterId, undefined);
   assert.equal((await request('join', { name: 'Late', code: host.state.code })).status, 400);
-  assert.equal((await post(host, 'leave')).status, 400);
+  assert.equal((await post(host, 'leave')).status, 200);
   controller.abort();
 });
 
@@ -339,4 +342,209 @@ test('chat reaches live streams without exposing the imposter word', async t => 
   assert.deepEqual(after.clues, before.clues);
   assert.equal(after.turnId, before.turnId);
   controller.abort();
+});
+
+test('host refresh restarts clues and votes with a different word and the same imposter', async t => {
+  const { host, players, state, post, describe } = await setup(t, 5);
+  assert.equal((await post(host, 'refresh')).status, 400);
+  await post(host, 'start');
+  await post(host, 'chat', { text: 'Keep our chat' });
+  const original = await Promise.all(players.map(state));
+  assert.equal((await post(players[1], 'refresh')).status, 403);
+  await describe();
+  await post(players[0], 'vote', { playerId: players[1].state.selfId });
+  assert.equal((await post(host, 'refresh')).status, 200);
+  const refreshed = await Promise.all(players.map(state));
+  for (let i = 0; i < players.length; i++) {
+    const s = refreshed[i];
+    assert.equal(s.phase, 'describing');
+    assert.equal(s.isImposter, original[i].isImposter);
+    assert.equal(s.dealId, original[i].dealId + 1);
+    assert.deepEqual(s.clues, []);
+    assert.deepEqual(s.votes, {});
+    assert.equal(s.myVote, null);
+    assert.equal(s.result, null);
+    assert.equal(s.turnId, s.players[0].id);
+    assert.deepEqual(s.messages, original[i].messages);
+    assert.equal(s.hostId, host.state.selfId);
+    assert.notDeepEqual(s.players, original[i].players);
+    if (s.isImposter) assert.equal(s.word, null);
+    else assert.notEqual(s.word, original[i].word);
+  }
+  await post(players.find(p => p.state.selfId === refreshed[0].turnId), 'clue', { text: 'Discard this clue' });
+  assert.equal((await post(host, 'refresh')).status, 200);
+  assert.deepEqual((await state(host)).clues, []);
+  await describe();
+  for (let i = 0; i < players.length; i++) {
+    await post(players[i], 'vote', { playerId: players[(i + 1) % players.length].state.selfId });
+  }
+  assert.equal((await post(host, 'refresh')).status, 400);
+});
+
+test('every deal changes turn order and uses a broad category', async t => {
+  const { host, players, state, post, describe } = await setup(t);
+  let order = (await state(host)).players;
+  for (let round = 0; round < 5; round++) {
+    await post(host, 'start');
+    const s = await state(host);
+    assert.notDeepEqual(s.players, order);
+    assert.equal(s.hostId, host.state.selfId);
+    assert.ok(['Food & drink', 'Animals', 'Places', 'Objects', 'Nature', 'Activities', 'Jobs', 'Games & sports'].includes(s.category));
+    order = s.players;
+    await describe();
+    for (let i = 0; i < players.length; i++) {
+      await post(players[i], 'vote', { playerId: players[(i + 1) % players.length].state.selfId });
+    }
+    await post(host, 'reset');
+  }
+});
+
+test('only the host can kick another room member and removed sessions lose access', async t => {
+  const { host, players, state, post, request } = await setup(t, 4);
+  const outsider = (await request('create', { name: 'Another room' })).data;
+  assert.equal((await post(players[1], 'kick', { playerId: players[2].state.selfId })).status, 403);
+  assert.equal((await post(host, 'kick', { playerId: host.state.selfId })).status, 400);
+  assert.equal((await post(host, 'kick', { playerId: outsider.state.selfId })).status, 400);
+  assert.equal((await post(host, 'kick', { playerId: 'missing' })).status, 400);
+  assert.equal((await post(host, 'kick', { playerId: players[1].state.selfId })).status, 200);
+  assert.equal((await state(host)).players.length, 3);
+  assert.equal((await state(host)).hostId, host.state.selfId);
+  assert.equal((await request('state', {}, players[1].token, 'GET')).status, 401);
+  assert.equal((await post(players[1], 'chat', { text: 'No longer allowed' })).status, 401);
+  assert.equal((await post(players[1], 'start')).status, 401);
+});
+
+for (const position of ['before', 'current', 'after']) {
+  test(`removing a player ${position === 'current' ? 'on' : position} the current turn preserves clue progress`, async t => {
+    const { host, players, state, post } = await setup(t, 5);
+    await post(host, 'start');
+    const states = await Promise.all(players.map(state));
+    const imposterId = players[states.findIndex(s => s.isImposter)].state.selfId;
+    const order = states[0].players;
+    const index = order.findIndex((p, i) => i > 0 && i < order.length - 1 && p.id !== imposterId && p.id !== host.state.selfId);
+    assert.ok(index > 0);
+    const target = players.find(p => p.state.selfId === order[index].id);
+    const turn = index + (position === 'before' ? 1 : position === 'after' ? -1 : 0);
+    for (let i = 0; i < turn; i++) {
+      await post(players.find(p => p.state.selfId === order[i].id), 'clue', { text: `Clue ${i}` });
+    }
+    assert.equal((await post(host, 'kick', { playerId: target.state.selfId })).status, 200);
+    let s = await state(host);
+    assert.equal(s.phase, 'describing');
+    assert.equal(s.turnId, order[turn + (position === 'current' ? 1 : 0)].id);
+    assert.equal(s.clues.length, turn);
+    if (position === 'before') assert.equal(s.clues.find(c => c.playerId === target.state.selfId).name, target.state.players.find(p => p.id === target.state.selfId).name);
+    while (s.phase === 'describing') {
+      const current = players.find(p => p.state.selfId === s.turnId);
+      assert.equal((await post(current, 'clue', { text: 'Remaining clue' })).status, 200);
+      s = await state(host);
+    }
+    assert.equal(s.phase, 'voting');
+    assert.equal(new Set(s.clues.map(c => c.playerId)).size, s.clues.length);
+  });
+}
+
+test('leaving during voting removes invalid ballots and lets remaining players finish', async t => {
+  const { host, players, state, post, describe, request } = await setup(t, 5);
+  await post(host, 'start');
+  const states = await Promise.all(players.map(state));
+  const target = players.find((p, i) => p !== host && !states[i].isImposter);
+  const remaining = players.filter(p => p !== target);
+  await describe();
+  await post(remaining[0], 'vote', { playerId: target.state.selfId });
+  await post(target, 'vote', { playerId: remaining[1].state.selfId });
+  await post(remaining[1], 'vote', { playerId: remaining[2].state.selfId });
+  assert.equal((await post(target, 'leave')).status, 200);
+  const after = await state(host);
+  assert.equal(after.phase, 'voting');
+  assert.equal(after.hostId, host.state.selfId);
+  assert.deepEqual(after.votes, { [remaining[1].state.selfId]: remaining[2].state.selfId });
+  assert.equal(after.myVote, null);
+  assert.equal(after.clues.length, 5);
+  assert.equal((await request('state', {}, target.token, 'GET')).status, 401);
+  for (let i = 0; i < remaining.length; i++) {
+    if (i !== 1) assert.equal((await post(remaining[i], 'vote', { playerId: remaining[(i + 1) % remaining.length].state.selfId })).status, 200);
+  }
+  const finished = await state(host);
+  assert.equal(finished.phase, 'results');
+  assert.equal(Object.keys(finished.result.counts).length, remaining.length);
+});
+
+test('removing the only missing voter completes voting immediately', async t => {
+  const { host, players, state, post, describe } = await setup(t, 5);
+  await post(host, 'start');
+  const states = await Promise.all(players.map(state));
+  const target = players.find((p, i) => p !== host && !states[i].isImposter);
+  const remaining = players.filter(p => p !== target);
+  await describe();
+  for (let i = 0; i < remaining.length; i++) {
+    await post(remaining[i], 'vote', { playerId: remaining[(i + 1) % remaining.length].state.selfId });
+  }
+  assert.equal((await post(host, 'kick', { playerId: target.state.selfId })).status, 200);
+  assert.equal((await state(host)).phase, 'results');
+});
+
+test('host departure transfers ownership and imposter departure or too few players cancels the game', async t => {
+  for (const reason of ['host', 'imposter', 'minimum']) {
+    await t.test(reason, async t => {
+      const { host, players, state, post } = await setup(t, reason === 'minimum' ? 3 : 5);
+      await post(host, 'start');
+      const states = await Promise.all(players.map(state));
+      const target = reason === 'host' ? host : players[states.findIndex(s => reason === 'imposter' ? s.isImposter : !s.isImposter)];
+      const remaining = players.filter(p => p !== target);
+      await post(target, 'leave');
+      const s = await state(remaining[0]);
+      assert.equal(s.hostId, target === host ? s.players[0].id : host.state.selfId);
+      assert.equal(s.phase, reason === 'host' && !states[0].isImposter ? 'describing' : 'lobby');
+      if (s.phase === 'lobby') {
+        assert.deepEqual(s.clues, []);
+        assert.deepEqual(s.votes, {});
+        assert.equal(s.word, null);
+        assert.equal(s.isImposter, null);
+        assert.match(s.notice, /returned to the lobby/);
+      }
+    });
+  }
+});
+
+test('leaving results preserves the outcome, clues and public vote history', async t => {
+  const { host, players, state, post, describe } = await setup(t);
+  await post(host, 'start');
+  await describe();
+  for (let i = 0; i < players.length; i++) {
+    await post(players[i], 'vote', { playerId: players[(i + 1) % players.length].state.selfId });
+  }
+  const before = await state(host);
+  await post(players[1], 'leave');
+  const after = await state(host);
+  assert.equal(after.phase, 'results');
+  assert.deepEqual(after.result, before.result);
+  assert.deepEqual(after.clues, before.clues);
+  assert.deepEqual(after.votes, before.votes);
+  assert.deepEqual(after.participants, before.participants);
+});
+
+test('kicking closes all removed player streams with a clear message', async t => {
+  const { base, host, players, post, request } = await setup(t);
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  const responses = await Promise.all([0, 1].map(() => fetch(`${base}/api/events`, {
+    headers: { Authorization: `Bearer ${players[1].token}` },
+    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+  })));
+  const readers = responses.map(response => response.body.getReader());
+  for (const reader of readers) await reader.read();
+  await post(host, 'kick', { playerId: players[1].state.selfId });
+  for (const reader of readers) {
+    let data = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      data += new TextDecoder().decode(value);
+    }
+    const event = JSON.parse(data.trim().slice(6));
+    assert.equal(event.removed, true);
+    assert.match(event.message, /removed.*host/);
+  }
+  assert.equal((await request('state', {}, players[1].token, 'GET')).status, 401);
 });

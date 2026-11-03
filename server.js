@@ -6,22 +6,17 @@ import path from 'node:path';
 import doodle from './doodle/server.js';
 
 const WORDS = [
-  ['Espresso', 'Drinks served in cafes'], ['Pancake', 'Breakfast & brunch foods'],
-  ['Avocado', 'Fruits & fresh produce'], ['Popcorn', 'Snacks & movie treats'],
-  ['Penguin', 'Birds & their habitats'], ['Octopus', 'Ocean & marine animals'],
-  ['Giraffe', 'Wild animals of the savanna'],
-  ['Airport', 'Travel & transportation hubs'], ['Library', 'Places for reading & learning'],
-  ['Museum', 'Places for culture & discovery'],
-  ['Umbrella', 'Weather & outdoor gear'], ['Headphones', 'Personal audio & electronics'],
-  ['Telescope', 'Tools for observing & exploring'], ['Hammock', 'Outdoor comfort & relaxation'],
-  ['Volcano', 'Landforms & geological features'], ['Rainbow', 'Weather & sky phenomena'],
-  ['Waterfall', 'Natural water features'],
-  ['Surfing', 'Water sports & beach activities'], ['Camping', 'Outdoor adventures & recreation'],
-  ['Karaoke', 'Music & group entertainment'],
-  ['Astronaut', 'Science & exploration careers'], ['Detective', 'Investigation & public safety jobs'],
-  ['Magician', 'Performance & entertainment jobs'],
-  ['Chess', 'Board games & strategy'], ['Bowling', 'Indoor sports & group games'],
-  ['Basketball', 'Team sports played on a court'],
+  ['Espresso', 'Food & drink'], ['Pancake', 'Food & drink'],
+  ['Avocado', 'Food & drink'], ['Popcorn', 'Food & drink'],
+  ['Penguin', 'Animals'], ['Octopus', 'Animals'], ['Giraffe', 'Animals'],
+  ['Airport', 'Places'], ['Library', 'Places'], ['Museum', 'Places'],
+  ['Umbrella', 'Objects'], ['Headphones', 'Objects'],
+  ['Telescope', 'Objects'], ['Hammock', 'Objects'],
+  ['Volcano', 'Nature'], ['Rainbow', 'Nature'], ['Waterfall', 'Nature'],
+  ['Surfing', 'Activities'], ['Camping', 'Activities'], ['Karaoke', 'Activities'],
+  ['Astronaut', 'Jobs'], ['Detective', 'Jobs'], ['Magician', 'Jobs'],
+  ['Chess', 'Games & sports'], ['Bowling', 'Games & sports'],
+  ['Basketball', 'Games & sports'],
 ];
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
@@ -52,7 +47,10 @@ export function createGameServer() {
       hostId: room.hostId,
       selfId: player.id,
       players: room.players.map(p => ({ id: p.id, name: p.name })),
+      participants: room.participants ?? [],
       round: room.round,
+      dealId: room.dealId ?? 0,
+      notice: room.notice ?? null,
       turnId: room.phase === 'describing' ? room.players[room.turn].id : null,
       clues: room.clues,
       messages: room.messages,
@@ -60,6 +58,7 @@ export function createGameServer() {
       word: active && (player.id !== room.imposterId || finished) ? room.word : null,
       isImposter: active ? player.id === room.imposterId : null,
       votedIds: Object.keys(room.votes),
+      votes: room.votes,
       myVote: room.votes[player.id] ?? null,
       result: finished ? room.result : null,
     };
@@ -82,16 +81,84 @@ export function createGameServer() {
     }
     throw new GameError('Your room session has expired. Please join again.', 401);
   }
-  function start(room) {
-    const choices = WORDS.filter(([word]) => word !== room.word);
-    [room.word, room.category] = choices[randomInt(choices.length)];
-    room.imposterId = room.players[randomInt(room.players.length)].id;
-    room.phase = 'describing';
-    room.round = 1;
+  function reset(room) {
+    room.phase = 'lobby';
+    room.round = 0;
     room.turn = 0;
     room.clues = [];
     room.votes = {};
     room.result = null;
+    room.participants = [];
+  }
+  function start(room, keepImposter = false) {
+    const choices = WORDS.filter(([word]) => word !== room.word);
+    [room.word, room.category] = choices[randomInt(choices.length)];
+    if (!keepImposter) room.imposterId = room.players[randomInt(room.players.length)].id;
+    const previousOrder = room.players.map(p => p.id);
+    for (let i = room.players.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [room.players[i], room.players[j]] = [room.players[j], room.players[i]];
+    }
+    if (room.players.every((p, i) => p.id === previousOrder[i])) {
+      room.players.push(room.players.shift());
+    }
+    room.phase = 'describing';
+    room.round = 1;
+    room.dealId = (room.dealId ?? 0) + 1;
+    room.participants = room.players.map(p => ({ id: p.id, name: p.name }));
+    room.turn = 0;
+    room.clues = [];
+    room.votes = {};
+    room.result = null;
+    room.notice = keepImposter ? 'The host refreshed the word. Same imposter, new clues and turn order.' : null;
+  }
+  function finishVoting(room) {
+    if (Object.keys(room.votes).length !== room.players.length) return;
+    const counts = Object.fromEntries(room.players.map(p => [p.id, 0]));
+    for (const id of Object.values(room.votes)) counts[id]++;
+    const highest = Math.max(...Object.values(counts));
+    const leaders = room.players.filter(p => counts[p.id] === highest);
+    const caught = leaders.length === 1 && leaders[0].id === room.imposterId;
+    const imposter = room.players.find(p => p.id === room.imposterId);
+    room.result = { caught, imposterId: imposter.id, imposterName: imposter.name, counts, tied: leaders.length > 1 };
+    room.phase = 'results';
+  }
+  function removePlayer(room, player, kicked = false) {
+    const active = ['describing', 'voting'].includes(room.phase);
+    const removedIndex = room.players.indexOf(player);
+    room.players.splice(removedIndex, 1);
+    const message = kicked ? 'You were removed from the room by the host.' : 'You left the room.';
+    for (const connection of streams.get(player.token) ?? []) {
+      connection.end(`data: ${JSON.stringify({ removed: true, message })}\n\n`);
+    }
+    streams.delete(player.token);
+    if (!room.players.length) {
+      rooms.delete(room.code);
+      return;
+    }
+    if (room.hostId === player.id) room.hostId = room.players[0].id;
+    room.notice = `${player.name} ${kicked ? 'was removed by the host' : 'left the room'}.`;
+    if (!active) return;
+    if (player.id === room.imposterId || room.players.length < 3) {
+      reset(room);
+      room.notice += ' The game returned to the lobby because the imposter left or fewer than three players remain.';
+      return;
+    }
+    delete room.votes[player.id];
+    for (const [voter, target] of Object.entries(room.votes)) {
+      if (target === player.id) delete room.votes[voter];
+    }
+    if (room.phase === 'describing') {
+      if (removedIndex < room.turn) room.turn--;
+      if (room.turn === room.players.length) {
+        room.turn = 0;
+        room.phase = 'voting';
+      }
+    }
+    if (room.phase === 'voting') {
+      room.notice += ' Votes for the departed player were cleared; choose again if needed.';
+      finishVoting(room);
+    }
   }
   async function body(req) {
     let data = '';
@@ -199,12 +266,25 @@ export function createGameServer() {
           fail(room.players.length < 3, 'You need at least 3 players to start.');
           start(room);
           break;
+        case '/api/refresh':
+          fail(player.id !== room.hostId, 'Only the host can refresh the word.', 403);
+          fail(!['describing', 'voting'].includes(room.phase), 'Refresh the word during clues or voting.');
+          start(room, true);
+          break;
+        case '/api/kick': {
+          fail(player.id !== room.hostId, 'Only the host can remove players.', 403);
+          fail(input.playerId === player.id, 'Use Leave room to leave your own room.');
+          const target = room.players.find(p => p.id === input.playerId);
+          fail(!target, 'Choose a player in this room.');
+          removePlayer(room, target, true);
+          break;
+        }
         case '/api/clue': {
           fail(room.phase !== 'describing', 'It is not time for descriptions.');
           fail(room.players[room.turn].id !== player.id, 'Wait for your turn.');
           const text = typeof input.text === 'string' ? input.text.trim() : '';
           fail(!text || text.length > 160, 'Write a description between 1 and 160 characters.');
-          room.clues.push({ playerId: player.id, round: room.round, text });
+          room.clues.push({ playerId: player.id, name: player.name, round: room.round, text });
           room.turn++;
           if (room.turn === room.players.length) {
             room.turn = 0;
@@ -218,34 +298,17 @@ export function createGameServer() {
           fail(input.playerId === player.id, 'You cannot vote for yourself.');
           fail(!room.players.some(p => p.id === input.playerId), 'Choose a player in this room.');
           room.votes[player.id] = input.playerId;
-          if (Object.keys(room.votes).length === room.players.length) {
-            const counts = Object.fromEntries(room.players.map(p => [p.id, 0]));
-            for (const id of Object.values(room.votes)) counts[id]++;
-            const highest = Math.max(...Object.values(counts));
-            const leaders = room.players.filter(p => counts[p.id] === highest);
-            const caught = leaders.length === 1 && leaders[0].id === room.imposterId;
-            const imposter = room.players.find(p => p.id === room.imposterId);
-            room.result = { caught, imposterId: imposter.id, imposterName: imposter.name, counts, tied: leaders.length > 1 };
-            room.phase = 'results';
-          }
+          finishVoting(room);
           break;
         }
         case '/api/reset':
           fail(player.id !== room.hostId, 'Only the host can open the next game.', 403);
           fail(room.phase !== 'results', 'Finish this game first.');
-          room.phase = 'lobby';
-          room.round = 0;
-          room.clues = [];
-          room.votes = {};
-          room.result = null;
+          reset(room);
+          room.notice = null;
           break;
         case '/api/leave':
-          fail(room.phase !== 'lobby', 'Players cannot leave during a game. You can reconnect by refreshing.');
-          room.players = room.players.filter(p => p.id !== player.id);
-          for (const connection of streams.get(player.token) ?? []) connection.end();
-          streams.delete(player.token);
-          if (!room.players.length) rooms.delete(room.code);
-          else room.hostId = room.players[0].id;
+          removePlayer(room, player);
           break;
         default:
           throw new GameError('Not found.', 404);
