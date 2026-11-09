@@ -675,3 +675,45 @@ test('finishing voting by removing a missing voter awards scores to remaining pl
   const transferred = await state(newHost);
   for (const p of transferred.players) assert.deepEqual(p, finished.players.find(previous => previous.id === p.id));
 });
+
+test('rooms use all 200 words before repeating across refreshes, completed games and cancellations', async t => {
+  const { host, players, state, post, request, describe } = await setup(t);
+  const categories = new Map();
+  const cycles = [];
+  let previousWord;
+  for (let cycle = 0; cycle < 2; cycle++) {
+    const words = new Set();
+    for (let deal = 0; deal < 200; deal++) {
+      if (cycle === 0 && deal === 0) {
+        assert.equal((await post(host, 'start')).status, 200);
+      } else if (deal === 100) {
+        await post(players[2], 'leave');
+        assert.equal((await state(host)).phase, 'lobby');
+        players[2] = (await request('join', { name: 'Player 2', code: host.state.code })).data;
+        assert.equal((await post(host, 'start')).status, 200);
+      } else if (deal > 0 && deal % 25 === 0) {
+        await describe();
+        for (const p of players) {
+          await post(p, 'vote', { playerId: (p === host ? players[1] : host).state.selfId });
+        }
+        await post(host, 'reset');
+        assert.equal((await post(host, 'start')).status, 200);
+      } else {
+        assert.equal((await post(host, 'refresh')).status, 200);
+      }
+      const current = await state(host);
+      assert.equal('usedWords' in current, false, 'Word history must not be exposed');
+      const visible = current.word ? current : await state(players[1]);
+      assert.ok(visible.word);
+      assert.notEqual(visible.word, previousWord, 'Cycle boundaries must not repeat consecutive words');
+      assert.ok(!words.has(visible.word), `Repeated ${visible.word} before exhausting the word pool`);
+      words.add(visible.word);
+      if (cycle === 0) categories.set(visible.category, (categories.get(visible.category) ?? 0) + 1);
+      previousWord = visible.word;
+    }
+    cycles.push(words);
+  }
+  assert.deepEqual(cycles[1], cycles[0], 'Every new cycle must cover the entire word pool');
+  assert.equal(categories.size, 8);
+  assert.ok([...categories.values()].every(count => count === 25));
+});

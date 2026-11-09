@@ -87,18 +87,26 @@ game returns to the lobby instead. Completed results stay available if players
 leave after voting.
 
 During clues or voting, the host can **Refresh word**. This chooses a different
-word and category, keeps the same imposter, shuffles turn order, hides everyone's
-card again, and clears all clues and votes to restart the clue round. Room chat
-is preserved.
+word with its broad category, keeps the same imposter, shuffles turn order, hides
+everyone's card again, and clears all clues and votes to restart the clue round.
+Room chat is preserved.
+
+Each room draws from 200 familiar words across eight broad categories without
+repeating a word until the entire pool has been used. Refreshing the word counts
+as using it, and returning to the lobby or cancelling a game does not clear
+the room's word history. After all 200 words, a new cycle begins without
+repeating the immediately previous word. History is private to the server and
+independent for each room; room expiry or a server restart clears it.
 
 ## Room scorecard
 
-The room scorecard ranks current players by total points, with tied scores
-sharing a rank. A non-imposter earns **1 point for voting for the imposter**,
+The combined turn-order and scorecard panel shows each player's total points,
+games played, correct votes, and successful bluffs next to their speaking-order
+number. Rows stay in turn order, not score order, and the current speaker is
+highlighted. A non-imposter earns **1 point for voting for the imposter**,
 even if the imposter survives. The imposter earns **2 points for surviving**,
 including tied votes, and zero when caught. Incorrect votes earn zero; there
-are no penalties. Games played, correct votes, and successful bluffs are shown
-alongside the total.
+are no penalties.
 
 Scores are awarded once, only when voting finishes. A word refresh or cancelled
 game awards no points or games played. Scores carry across games and returning
@@ -112,10 +120,10 @@ expiry. The scorecard is visible during every phase.
 
 Open the same game link in your phone's browser; no separate app is needed.
 On small screens, the room opens directly on the game card and current action,
-with turn order and chat below. Clues and ballots remain expanded. Forms use
-phone-sized text and touch targets, and **How to play** stays available in the
-header. The layout supports portrait and landscape, safe-area insets, and
-long player names without horizontal scrolling.
+with the combined turn-order/scorecard panel and chat below. Clues and ballots
+remain expanded. Forms use phone-sized text and touch targets, and **How to play**
+stays available in the header. The layout supports portrait and landscape,
+safe-area insets, and long player names without horizontal scrolling.
 
 ## Room chat
 

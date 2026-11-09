@@ -5,19 +5,64 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import doodle from './doodle/server.js';
 
-const WORDS = [
-  ['Espresso', 'Food & drink'], ['Pancake', 'Food & drink'],
-  ['Avocado', 'Food & drink'], ['Popcorn', 'Food & drink'],
-  ['Penguin', 'Animals'], ['Octopus', 'Animals'], ['Giraffe', 'Animals'],
-  ['Airport', 'Places'], ['Library', 'Places'], ['Museum', 'Places'],
-  ['Umbrella', 'Objects'], ['Headphones', 'Objects'],
-  ['Telescope', 'Objects'], ['Hammock', 'Objects'],
-  ['Volcano', 'Nature'], ['Rainbow', 'Nature'], ['Waterfall', 'Nature'],
-  ['Surfing', 'Activities'], ['Camping', 'Activities'], ['Karaoke', 'Activities'],
-  ['Astronaut', 'Jobs'], ['Detective', 'Jobs'], ['Magician', 'Jobs'],
-  ['Chess', 'Games & sports'], ['Bowling', 'Games & sports'],
-  ['Basketball', 'Games & sports'],
-];
+const WORDS = Object.entries({
+  'Food & drink': [
+    'Espresso', 'Pancake', 'Avocado', 'Popcorn', 'Pizza',
+    'Sushi', 'Burger', 'Pasta', 'Taco', 'Sandwich',
+    'Dumpling', 'Waffle', 'Chocolate', 'Ice cream', 'Doughnut',
+    'Watermelon', 'Pineapple', 'Strawberry', 'Pretzel', 'Croissant',
+    'Lemonade', 'Milkshake', 'Tea', 'Cookie', 'Omelette',
+  ],
+  Animals: [
+    'Penguin', 'Octopus', 'Giraffe', 'Elephant', 'Dolphin',
+    'Tiger', 'Lion', 'Zebra', 'Kangaroo', 'Koala',
+    'Panda', 'Monkey', 'Gorilla', 'Rabbit', 'Fox',
+    'Wolf', 'Turtle', 'Crocodile', 'Butterfly', 'Flamingo',
+    'Peacock', 'Owl', 'Eagle', 'Shark', 'Whale',
+  ],
+  Places: [
+    'Airport', 'Library', 'Museum', 'Hospital', 'School',
+    'Restaurant', 'Bakery', 'Cinema', 'Theater', 'Stadium',
+    'Playground', 'Zoo', 'Aquarium', 'Supermarket', 'Hotel',
+    'Castle', 'Lighthouse', 'Train station', 'Harbor', 'Farm',
+    'Post office', 'Fire station', 'Courthouse', 'Observatory', 'Amusement park',
+  ],
+  Objects: [
+    'Umbrella', 'Headphones', 'Telescope', 'Hammock', 'Backpack',
+    'Candle', 'Mirror', 'Clock', 'Camera', 'Bicycle',
+    'Ladder', 'Scissors', 'Wallet', 'Key', 'Pillow',
+    'Blanket', 'Suitcase', 'Toothbrush', 'Flashlight', 'Balloon',
+    'Guitar', 'Kettle', 'Sunglasses', 'Notebook', 'Compass',
+  ],
+  Nature: [
+    'Volcano', 'Rainbow', 'Waterfall', 'Mountain', 'Ocean',
+    'River', 'Lake', 'Desert', 'Forest', 'Island',
+    'Glacier', 'Canyon', 'Cave', 'Beach', 'Meadow',
+    'Thunderstorm', 'Snowflake', 'Tornado', 'Earthquake', 'Sunset',
+    'Cloud', 'Moon', 'Star', 'Cactus', 'Sunflower',
+  ],
+  Activities: [
+    'Surfing', 'Camping', 'Karaoke', 'Hiking', 'Gardening',
+    'Cooking', 'Painting', 'Dancing', 'Fishing', 'Cycling',
+    'Swimming', 'Skiing', 'Skating', 'Knitting', 'Reading',
+    'Yoga', 'Meditation', 'Picnicking', 'Stargazing', 'Shopping',
+    'Snorkeling', 'Sailing', 'Rock climbing', 'Pottery', 'Birdwatching',
+  ],
+  Jobs: [
+    'Astronaut', 'Detective', 'Magician', 'Chef', 'Doctor',
+    'Nurse', 'Teacher', 'Firefighter', 'Pilot', 'Farmer',
+    'Architect', 'Dentist', 'Plumber', 'Electrician', 'Scientist',
+    'Baker', 'Librarian', 'Journalist', 'Photographer', 'Mechanic',
+    'Carpenter', 'Artist', 'Singer', 'Lawyer', 'Lifeguard',
+  ],
+  'Games & sports': [
+    'Chess', 'Bowling', 'Basketball', 'Football', 'Tennis',
+    'Cricket', 'Badminton', 'Volleyball', 'Baseball', 'Golf',
+    'Rugby', 'Hockey', 'Table tennis', 'Darts', 'Billiards',
+    'Archery', 'Boxing', 'Wrestling', 'Fencing', 'Judo',
+    'Hide-and-seek', 'Tag', 'Charades', 'Hopscotch', 'Dominoes',
+  ],
+}).flatMap(([category, words]) => words.map(word => [word, category]));
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const FILES = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
 const MAX_PLAYERS = 12;
@@ -94,8 +139,10 @@ export function createGameServer() {
     room.participants = [];
   }
   function start(room, keepImposter = false) {
-    const choices = WORDS.filter(([word]) => word !== room.word);
+    if (room.usedWords.size === WORDS.length) room.usedWords.clear();
+    const choices = WORDS.filter(([word]) => !room.usedWords.has(word) && word !== room.word);
     [room.word, room.category] = choices[randomInt(choices.length)];
+    room.usedWords.add(room.word);
     if (!keepImposter) room.imposterId = room.players[randomInt(room.players.length)].id;
     const previousOrder = room.players.map(p => p.id);
     for (let i = room.players.length - 1; i > 0; i--) {
@@ -241,7 +288,7 @@ export function createGameServer() {
           fail(rooms.size >= 1000, 'The server is full. Please try again later.', 503);
           let code;
           do { code = randomBytes(3).toString('hex').toUpperCase(); } while (rooms.has(code));
-          room = { code, phase: 'lobby', players: [], clues: [], messages: [], votes: {}, round: 0, updatedAt: Date.now() };
+          room = { code, phase: 'lobby', players: [], clues: [], messages: [], votes: {}, round: 0, usedWords: new Set(), updatedAt: Date.now() };
           rooms.set(code, room);
         } else {
           room = rooms.get(String(input.code ?? '').trim().toUpperCase());
