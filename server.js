@@ -46,7 +46,10 @@ export function createGameServer() {
       phase: room.phase,
       hostId: room.hostId,
       selfId: player.id,
-      players: room.players.map(p => ({ id: p.id, name: p.name })),
+      players: room.players.map(p => ({
+        id: p.id, name: p.name, score: p.score, gamesPlayed: p.gamesPlayed,
+        correctVotes: p.correctVotes, successfulBluffs: p.successfulBluffs,
+      })),
       participants: room.participants ?? [],
       round: room.round,
       dealId: room.dealId ?? 0,
@@ -113,13 +116,25 @@ export function createGameServer() {
     room.notice = keepImposter ? 'The host refreshed the word. Same imposter, new clues and turn order.' : null;
   }
   function finishVoting(room) {
-    if (Object.keys(room.votes).length !== room.players.length) return;
+    if (room.phase !== 'voting' || Object.keys(room.votes).length !== room.players.length) return;
     const counts = Object.fromEntries(room.players.map(p => [p.id, 0]));
     for (const id of Object.values(room.votes)) counts[id]++;
     const highest = Math.max(...Object.values(counts));
     const leaders = room.players.filter(p => counts[p.id] === highest);
     const caught = leaders.length === 1 && leaders[0].id === room.imposterId;
     const imposter = room.players.find(p => p.id === room.imposterId);
+    for (const player of room.players) {
+      player.gamesPlayed++;
+      if (player.id === room.imposterId) {
+        if (!caught) {
+          player.score += 2;
+          player.successfulBluffs++;
+        }
+      } else if (room.votes[player.id] === room.imposterId) {
+        player.score++;
+        player.correctVotes++;
+      }
+    }
     room.result = { caught, imposterId: imposter.id, imposterName: imposter.name, counts, tied: leaders.length > 1 };
     room.phase = 'results';
   }
@@ -235,7 +250,10 @@ export function createGameServer() {
           fail(room.players.length >= MAX_PLAYERS, 'This room is full (12 players maximum).');
           fail(room.players.some(p => p.name.toLowerCase() === name.toLowerCase()), 'That name is already in this room.');
         }
-        player = { id: randomBytes(8).toString('hex'), token: randomBytes(24).toString('hex'), name };
+        player = {
+          id: randomBytes(8).toString('hex'), token: randomBytes(24).toString('hex'), name,
+          score: 0, gamesPlayed: 0, correctVotes: 0, successfulBluffs: 0,
+        };
         room.players.push(player);
         room.hostId ??= player.id;
         broadcast(room);

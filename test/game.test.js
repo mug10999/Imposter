@@ -548,3 +548,130 @@ test('kicking closes all removed player streams with a clear message', async t =
   }
   assert.equal((await request('state', {}, players[1].token, 'GET')).status, 401);
 });
+
+test('scorecard awards correct votes and surviving imposters once per completed game', async t => {
+  const { host, players, state, post, describe } = await setup(t, 4);
+  const expected = Object.fromEntries(players.map(p => [p.state.selfId, {
+    score: 0, gamesPlayed: 0, correctVotes: 0, successfulBluffs: 0,
+  }]));
+  const scores = s => Object.fromEntries(s.players.map(({ id, score, gamesPlayed, correctVotes, successfulBluffs }) => [
+    id, { score, gamesPlayed, correctVotes, successfulBluffs },
+  ]));
+  assert.deepEqual(scores(await state(host)), expected);
+  for (const outcome of ['caught', 'tied', 'innocent']) {
+    await post(host, 'start');
+    const states = await Promise.all(players.map(state));
+    const imposter = players[states.findIndex(s => s.isImposter)];
+    const others = players.filter(p => p !== imposter);
+    await describe();
+    const ballots = new Map(players.map((p, i) => [
+      p.state.selfId,
+      outcome === 'tied' ? players[(i + 1) % players.length].state.selfId
+        : outcome === 'caught' ? (p === imposter ? others[0] : imposter).state.selfId
+          : (p === others[0] ? imposter : others[0]).state.selfId,
+    ]));
+    for (let i = 0; i < players.length; i++) {
+      assert.deepEqual(scores(await state(host)), expected, 'Scores change only after all votes are locked');
+      assert.equal((await post(players[i], 'vote', { playerId: ballots.get(players[i].state.selfId) })).status, 200);
+    }
+    const finished = await state(host);
+    assert.equal(finished.result.caught, outcome === 'caught');
+    assert.equal(finished.result.tied, outcome === 'tied');
+    for (const player of players) {
+      const total = expected[player.state.selfId];
+      total.gamesPlayed++;
+      if (player === imposter && outcome !== 'caught') {
+        total.score += 2;
+        total.successfulBluffs++;
+      } else if (ballots.get(player.state.selfId) === imposter.state.selfId) {
+        total.score++;
+        total.correctVotes++;
+      }
+    }
+    for (const p of players) assert.deepEqual(scores(await state(p)), expected);
+    assert.equal((await post(host, 'vote', { playerId: others[0].state.selfId })).status, 400);
+    assert.deepEqual(scores(await state(host)), expected, 'Repeated requests must not award points again');
+    await post(host, 'reset');
+    assert.deepEqual(scores(await state(host)), expected, 'Returning to lobby retains every score');
+  }
+  await post(host, 'start');
+  const before = scores(await state(host));
+  await describe();
+  await post(host, 'vote', { playerId: players[1].state.selfId });
+  await post(host, 'refresh');
+  assert.deepEqual(scores(await state(host)), before, 'Refreshing an unfinished game awards nothing');
+  const current = await Promise.all(players.map(state));
+  const imposter = players[current.findIndex(s => s.isImposter)];
+  await post(imposter, 'leave');
+  const remaining = players.find(p => p !== imposter);
+  const cancelled = await state(remaining);
+  assert.equal(cancelled.phase, 'lobby');
+  for (const p of cancelled.players) {
+    assert.deepEqual(scores(cancelled)[p.id], before[p.id], 'Cancellation preserves other players without awarding points');
+  }
+});
+
+for (const action of ['leave', 'kick']) {
+  test(`scores are removed on ${action} and rejoining starts at zero`, async t => {
+    const { host, players, state, post, describe, request } = await setup(t, 4);
+    await post(host, 'start');
+    const states = await Promise.all(players.map(state));
+    const imposter = players[states.findIndex(s => s.isImposter)];
+    const others = players.filter(p => p !== imposter);
+    await describe();
+    for (const p of players) {
+      await post(p, 'vote', { playerId: (p === imposter ? others[0] : imposter).state.selfId });
+    }
+    const departed = others.find(p => p !== host);
+    const before = await state(host);
+    assert.equal(before.players.find(p => p.id === departed.state.selfId).score, 1);
+    if (action === 'leave') await post(departed, 'leave');
+    else await post(host, 'kick', { playerId: departed.state.selfId });
+    const after = await state(host);
+    assert.ok(!after.players.some(p => p.id === departed.state.selfId));
+    for (const p of after.players) assert.deepEqual(p, before.players.find(previous => previous.id === p.id));
+    await post(host, 'reset');
+    const name = before.players.find(p => p.id === departed.state.selfId).name;
+    const rejoined = (await request('join', {
+      name, code: host.state.code, score: 999, gamesPlayed: 99, correctVotes: 99, successfulBluffs: 99,
+    })).data;
+    const fresh = rejoined.state.players.find(p => p.id === rejoined.state.selfId);
+    assert.notEqual(fresh.id, departed.state.selfId);
+    assert.equal(fresh.score, 0);
+    assert.equal(fresh.gamesPlayed, 0);
+    assert.equal(fresh.correctVotes, 0);
+    assert.equal(fresh.successfulBluffs, 0);
+    const newRoom = (await request('create', { name: 'Fresh host', score: 999 })).data;
+    assert.equal(newRoom.state.players[0].score, 0);
+  });
+}
+
+test('finishing voting by removing a missing voter awards scores to remaining players only', async t => {
+  const { host, players, state, post, describe } = await setup(t, 5);
+  await post(host, 'start');
+  const states = await Promise.all(players.map(state));
+  const imposter = players[states.findIndex(s => s.isImposter)];
+  const departed = players.find((p, i) => p !== host && !states[i].isImposter);
+  const remaining = players.filter(p => p !== departed);
+  await describe();
+  for (const p of remaining) {
+    await post(p, 'vote', { playerId: (p === imposter ? remaining.find(p => p !== imposter) : imposter).state.selfId });
+  }
+  assert.ok((await state(host)).players.every(p => p.score === 0 && p.gamesPlayed === 0));
+  await post(host, 'kick', { playerId: departed.state.selfId });
+  const finished = await state(host);
+  assert.equal(finished.phase, 'results');
+  assert.ok(!finished.players.some(p => p.id === departed.state.selfId));
+  for (const p of finished.players) {
+    assert.equal(p.score, p.id === imposter.state.selfId ? 0 : 1);
+    assert.equal(p.gamesPlayed, 1);
+    assert.equal(p.correctVotes, p.id === imposter.state.selfId ? 0 : 1);
+    assert.equal(p.successfulBluffs, 0);
+  }
+  await post(host, 'chat', { text: 'Scores stay the same' });
+  assert.deepEqual((await state(host)).players, finished.players);
+  await post(host, 'leave');
+  const newHost = remaining.find(p => p !== host);
+  const transferred = await state(newHost);
+  for (const p of transferred.players) assert.deepEqual(p, finished.players.find(previous => previous.id === p.id));
+});

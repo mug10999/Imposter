@@ -91,6 +91,23 @@ word and category, keeps the same imposter, shuffles turn order, hides everyone'
 card again, and clears all clues and votes to restart the clue round. Room chat
 is preserved.
 
+## Room scorecard
+
+The room scorecard ranks current players by total points, with tied scores
+sharing a rank. A non-imposter earns **1 point for voting for the imposter**,
+even if the imposter survives. The imposter earns **2 points for surviving**,
+including tied votes, and zero when caught. Incorrect votes earn zero; there
+are no penalties. Games played, correct votes, and successful bluffs are shown
+alongside the total.
+
+Scores are awarded once, only when voting finishes. A word refresh or cancelled
+game awards no points or games played. Scores carry across games and returning
+to the lobby, and browser refreshes or temporary disconnects retain them.
+Leaving or being kicked removes that player's score; rejoining starts at zero.
+Other players keep their scores, including when a departure cancels a game.
+Like rooms, scores live in server memory and are lost on server restart or room
+expiry. The scorecard is visible during every phase.
+
 ## Mobile play
 
 Open the same game link in your phone's browser; no separate app is needed.
