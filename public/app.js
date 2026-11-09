@@ -112,14 +112,20 @@ function clearSession() {
   $('#connection-label').textContent = "LET'S PLAY";
   $('#connection-label').classList.remove('connection-lost');
 }
-function clueMarkup(clue) {
-  return `<div class="clue"><div class="clue-top"><strong>${escape(clue.name ?? playerName(clue.playerId))}</strong><span>ROUND ${clue.round}</span></div><p class="clue-text">${escape(clue.text)}</p></div>`;
-}
 function secretMarkup() {
   return `<div class="secret-card ${reveal && state.isImposter ? 'imposter' : ''}"><div class="secret-label">${reveal && state.isImposter ? 'YOUR MISSION: BLEND IN' : 'FOR YOUR EYES ONLY'}</div><div class="secret-word">${reveal ? state.isImposter ? "You're the imposter." : escape(state.word) : 'A little secret.'}</div>${reveal ? `<div class="category">CATEGORY &nbsp; / &nbsp; ${escape(state.category)}</div>` : ''}<button class="button ghost reveal-button" id="reveal-word" aria-pressed="${reveal}">${reveal ? 'Hide my card' : 'Reveal my card'}</button><p class="small-muted">${reveal && state.isImposter ? 'You only know the category. Listen closely. Make it convincing.' : "Keep it to yourself. Especially if you're sharing your screen."}</p></div>`;
 }
 function activityMarkup() {
-  return `<section class="round-activity" aria-label="Round activity"><div class="phase-heading"><h3>Everyone's clues</h3></div><div class="clue-list" id="clue-list" role="log" aria-label="Submitted clues">${state.clues.length ? state.clues.map(clueMarkup).join('') : '<p class="small-muted">Clues will appear here as players take their turns.</p>'}</div><div class="phase-heading"><h3>Who voted for whom</h3></div><div class="ballot-list" aria-live="polite">${Object.entries(state.votes).length ? Object.entries(state.votes).map(([voter, target]) => `<p class="ballot"><strong>${escape(playerName(voter))}</strong> &rarr; ${escape(playerName(target))}</p>`).join('') : '<p class="small-muted">No votes yet. Locked votes appear here for everyone.</p>'}</div></section>`;
+  const clues = new Map(state.clues.map(clue => [clue.playerId, clue]));
+  const currentIds = new Set(state.players.map(p => p.id));
+  const finished = state.phase === 'results';
+  return `<section class="round-activity" aria-labelledby="round-summary-heading"><div class="phase-heading"><h3 id="round-summary-heading">Clues &amp; votes</h3></div><div class="round-summary-list" role="list" aria-label="Player clues and votes">${state.participants.map(p => {
+    const clue = clues.get(p.id);
+    const left = !currentIds.has(p.id);
+    const target = state.votes[p.id];
+    const count = finished ? state.result.counts[p.id] : undefined;
+    return `<article class="clue round-player" role="listitem"><div class="clue-top"><strong>${escape(p.name)}${finished && p.id === state.result.imposterId ? ' <span class="player-meta">IMPOSTER</span>' : ''}</strong><div class="round-player-status">${left ? '<span class="player-meta">LEFT ROOM</span>' : ''}${finished ? `<span class="round-vote-count">${count === undefined ? 'Not in final vote' : `${count} ${count === 1 ? 'vote' : 'votes'} received`}</span>` : ''}</div></div><p class="clue-text"><span class="round-label">Clue</span>${clue ? escape(clue.text) : `<span class="small-muted">${left ? 'Left before giving a clue.' : 'Waiting for their turn.'}</span>`}</p><p class="round-vote"><span class="round-label">Voted for</span>${target ? escape(playerName(target)) : `<span class="small-muted">${left ? 'No vote.' : state.phase === 'describing' ? 'Voting opens after clues.' : 'Not voted yet.'}</span>`}</p></article>`;
+  }).join('')}</div></section>`;
 }
 function playersPanelMarkup(host) {
   return `<aside class="panel players-panel" aria-labelledby="players-heading"><div class="players-title"><h3 id="players-heading">TURN ORDER &amp; SCORECARD</h3><span>${state.players.length}/12</span></div><p class="small-muted">Numbers show speaking order, shuffled each game.</p><div class="player-list">${state.players.map((p, index) => `<div class="player player-score ${p.id === state.turnId ? 'current' : ''}"><span class="avatar">${index + 1}</span><span class="player-name">${escape(p.name)}${p.id === state.selfId ? ' <span class="player-meta">YOU</span>' : ''}<span class="player-meta">${p.id === state.hostId ? ' HOST' : ''}${state.votedIds.includes(p.id) ? ' VOTED' : ''}</span></span><strong class="score-points">${p.score}<span>${p.score === 1 ? 'point' : 'points'}</span></strong><span class="player-stats">Games: ${p.gamesPlayed} &middot; Correct votes: ${p.correctVotes} &middot; Successful bluffs: ${p.successfulBluffs}</span>${host && p.id !== state.selfId ? `<button class="kick-button" data-kick="${p.id}" aria-label="Kick ${escape(p.name)}">Kick</button>` : ''}</div>`).join('')}</div><p class="small-muted">Correct vote: 1 point. Imposter survives: 2 points, including ties.</p><p class="small-muted">Scores carry across games until you leave or are kicked. Cancelled games earn no points.</p></aside>`;
@@ -186,7 +192,7 @@ function render() {
     content = `<div class="empty-lobby"><div class="orbit">&#10035;</div><h3>The usual suspects are gathering.</h3><p class="small-muted">Share the room code or invite link with your team.<br>Everyone joins on their own device. One of you won't be so innocent.</p><div class="lobby-rules"><span>3-12 PLAYERS</span><span>1 CLUE ROUND</span><span>1 IMPOSTER</span></div></div>${host ? `<button id="start-game" class="button secondary start-button" ${state.players.length < 3 ? 'disabled' : ''}>${state.players.length < 3 ? `Waiting for ${3 - state.players.length} more ${state.players.length === 2 ? 'player' : 'players'}` : 'Everyone in? Deal the secrets'} <span>&#8594;</span></button>` : '<div class="waiting">You\'re in. The host will start when everyone is ready.</div>'}`;
   } else if (state.phase === 'results') {
     const r = state.result;
-    content = `<div class="result"><div class="secret-label">THE TRUTH IS OUT</div><div class="result-icon">${r.caught ? '&#9678;' : '&#10035;'}</div><h2>${r.caught ? `Imposter ${escape(r.imposterName)} is caught!` : `Imposter ${escape(r.imposterName)} survived.`}</h2><p class="small-muted">${r.caught ? 'Good instincts, team. The word is safe.' : r.tied ? 'A tied vote. Just enough doubt to get away with it.' : 'Hiding in plain sight. That was a convincing bluff.'}</p><div class="secret-label">THE SECRET WORD WAS</div><div class="secret-word">${escape(state.word)}</div><p class="category">${escape(state.category)}</p></div><div class="phase-heading"><h3>The final vote</h3></div>${state.participants.filter(p => p.id in r.counts).map(p => `<div class="player"><span class="avatar">${escape(initials(p.name))}</span><span class="player-name">${escape(p.name)}${p.id === r.imposterId ? ' <span class="player-meta">IMPOSTER</span>' : ''}</span><span class="vote-count">${r.counts[p.id]} ${r.counts[p.id] === 1 ? 'vote' : 'votes'}</span></div>`).join('')}${host ? '<button id="reset-game" class="button secondary start-button">Back to lobby <span>&#8594;</span></button>' : '<div class="waiting">The host can open the lobby for another game.</div>'}`;
+    content = `<div class="result"><div class="secret-label">THE TRUTH IS OUT</div><div class="result-icon">${r.caught ? '&#9678;' : '&#10035;'}</div><h2>${r.caught ? `Imposter ${escape(r.imposterName)} is caught!` : `Imposter ${escape(r.imposterName)} survived.`}</h2><p class="small-muted">${r.caught ? 'Good instincts, team. The word is safe.' : r.tied ? 'A tied vote. Just enough doubt to get away with it.' : 'Hiding in plain sight. That was a convincing bluff.'}</p><div class="secret-label">THE SECRET WORD WAS</div><div class="secret-word">${escape(state.word)}</div><p class="category">${escape(state.category)}</p></div>`;
   } else {
     content = secretMarkup();
     if (state.phase === 'describing') {
@@ -197,6 +203,7 @@ function render() {
     }
   }
   if (state.phase !== 'lobby') content += activityMarkup();
+  if (state.phase === 'results') content += host ? '<button id="reset-game" class="button secondary start-button">Back to lobby <span>&#8594;</span></button>' : '<div class="waiting">The host can open the lobby for another game.</div>';
   chat?.remove();
   game.innerHTML = `<div class="room-header"><div><div class="eyebrow">YOUR PRIVATE HANGOUT</div><div class="room-code">${state.code}</div></div><div class="room-actions"><button class="button ghost" id="copy-invite">Copy invite &#8599;</button>${host && ['describing', 'voting'].includes(state.phase) ? '<button class="button ghost" id="refresh-word">Refresh word</button>' : ''}<button class="button ghost" id="leave-room">Leave room</button></div></div>${state.notice ? `<p class="notice room-notice" role="status">${escape(state.notice)}</p>` : ''}<div class="room-layout"><div class="panel game-panel">${content}</div><div class="room-sidebar">${playersPanelMarkup(host)}</div></div>`;
   $('.room-sidebar').append(chat ?? chatPanel());
@@ -209,8 +216,6 @@ function render() {
     if (selection) element.setSelectionRange(...selection);
   }
   updateChat(chatScroll);
-  const list = $('#clue-list');
-  if (list) list.scrollTop = list.scrollHeight;
 }
 async function sendChat() {
   if (sendingChat) return;

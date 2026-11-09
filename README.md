@@ -67,8 +67,10 @@ The app is not a static-only website; all players must reach the same server.
 4. Turn order is shuffled each game and shown in the player list. Each player
    submits one description in turn order. Voting opens immediately
    after every player has submitted their clue.
-5. Everyone votes for another player. Clues and individual locked votes stay
-   visible throughout clues, voting, and results, without opening a disclosure.
+5. Everyone votes for another player. One **Clues & votes** summary shows each
+   player's clue and locked vote together, then adds their final votes received
+   at results. It stays expanded throughout clues, voting, and results, and
+   preserves departed players' clues and any completed vote history.
    Votes cannot be changed unless their target leaves the active game. Once
    everyone votes, the imposter is caught only if they alone receive the most
    votes. A tie or a different winner means the imposter survives.
@@ -120,8 +122,9 @@ expiry. The scorecard is visible during every phase.
 
 Open the same game link in your phone's browser; no separate app is needed.
 On small screens, the room opens directly on the game card and current action,
-with the combined turn-order/scorecard panel and chat below. Clues and ballots
-remain expanded. Forms use phone-sized text and touch targets, and **How to play**
+with the combined turn-order/scorecard panel and chat below. The unified clues
+and votes summary stays expanded without nested scrolling. Forms use phone-sized
+text and touch targets, and **How to play**
 stays available in the header. The layout supports portrait and landscape,
 safe-area insets, and long player names without horizontal scrolling.
 
