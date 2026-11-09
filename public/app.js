@@ -102,6 +102,7 @@ function clearSession() {
   sessionStorage.removeItem('imposter-token');
   token = null;
   state = null;
+  document.body.classList.remove('game-open');
   reveal = false;
   selectedVote = null;
   $('#game').replaceChildren();
@@ -171,6 +172,8 @@ function render() {
   const focusedInput = ['clue-text', 'chat-text'].includes(focused) ? document.activeElement : null;
   const selection = focusedInput ? [focusedInput.selectionStart, focusedInput.selectionEnd] : null;
   $('#home').hidden = true;
+  document.body.classList.remove('invite-entry');
+  document.body.classList.add('game-open');
   game.hidden = false;
   $('#breadcrumb-current').textContent = `Room ${state.code}`;
   const host = state.selfId === state.hostId;
@@ -302,13 +305,21 @@ $('#game').addEventListener('submit', async event => {
   await act('clue', { text: $('#clue-text').value });
 });
 $('#how-button').addEventListener('click', () => $('#how-dialog').showModal());
+$('#mobile-how-button').addEventListener('click', () => $('#how-dialog').showModal());
 $('#close-how').addEventListener('click', () => $('#how-dialog').close());
-const invitedRoom = new URLSearchParams(location.search).get('room');
-if (invitedRoom && /^[A-Fa-f0-9]{6}$/.test(invitedRoom)) $('#room-code').value = invitedRoom.toUpperCase();
+const roomParameter = new URLSearchParams(location.search).get('room');
+const invitedRoom = /^[A-Fa-f0-9]{6}$/.test(roomParameter ?? '') ? roomParameter.toUpperCase() : null;
+if (invitedRoom) {
+  $('#room-code').value = invitedRoom;
+  document.body.classList.add('invite-entry');
+}
 if (token) {
   try {
-    receive(await api('state', {}, 'GET'));
-    listen();
+    const current = await api('state', {}, 'GET');
+    if (!invitedRoom || current.code === invitedRoom) {
+      receive(current);
+      listen();
+    }
   } catch (error) {
     if (error.status === 401) clearSession();
     showError(error.message);

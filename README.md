@@ -54,6 +54,8 @@ The app is not a static-only website; all players must reach the same server.
 ## Play
 
 1. Enter your name, create a room, and share its invite link or six-character code.
+   A valid invite link opens only **Slip into a room**, with the code prefilled,
+   instead of showing the create-room option. The normal home page offers both.
 2. Teammates enter their names and join. The host starts once at least three
    players are present.
 3. Exactly one randomly selected player is the imposter and only sees the
@@ -88,6 +90,15 @@ During clues or voting, the host can **Refresh word**. This chooses a different
 word and category, keeps the same imposter, shuffles turn order, hides everyone's
 card again, and clears all clues and votes to restart the clue round. Room chat
 is preserved.
+
+## Mobile play
+
+Open the same game link in your phone's browser; no separate app is needed.
+On small screens, the room opens directly on the game card and current action,
+with turn order and chat below. Clues and ballots remain expanded. Forms use
+phone-sized text and touch targets, and **How to play** stays available in the
+header. The layout supports portrait and landscape, safe-area insets, and
+long player names without horizontal scrolling.
 
 ## Room chat
 
